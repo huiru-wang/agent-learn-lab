@@ -1,0 +1,68 @@
+{
+  "models": [
+    {
+      "id": "gpt-4o-mini",
+      "name": "GPT-4o Mini",
+      "provider": "openai",
+      "baseUrl": "",
+      "apiKey": "",
+      "model": "gpt-4o-mini"
+    },
+    {
+      "id": "gpt-4o",
+      "name": "GPT-4o",
+      "provider": "openai",
+      "baseUrl": "",
+      "apiKey": "",
+      "model": "gpt-4o"
+    },
+    {
+      "id": "deepseek-chat",
+      "name": "DeepSeek Chat",
+      "provider": "deepseek",
+      "baseUrl": "https://api.deepseek.com",
+      "apiKey": "",
+      "model": "deepseek-chat"
+    },
+    {
+      "id": "deepseek-reasoner",
+      "name": "DeepSeek Reasoner",
+      "provider": "deepseek",
+      "baseUrl": "https://api.deepseek.com",
+      "apiKey": "",
+      "model": "deepseek-reasoner"
+    },
+    {
+      "id": "claude-3-5-sonnet",
+      "name": "Claude 3.5 Sonnet",
+      "provider": "anthropic",
+      "baseUrl": "https://api.anthropic.com/v1",
+      "apiKey": "",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    {
+      "id": "qwen-turbo",
+      "name": "通义千问 Turbo",
+      "provider": "qwen",
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiKey": "",
+      "model": "qwen-turbo"
+    },
+    {
+      "id": "glm-4",
+      "name": "GLM-4",
+      "provider": "zhipu",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "apiKey": "",
+      "model": "glm-4"
+    },
+    {
+      "id": "custom-model",
+      "name": "自定义模型",
+      "provider": "custom",
+      "baseUrl": "",
+      "apiKey": "",
+      "model": ""
+    }
+  ]
+}
