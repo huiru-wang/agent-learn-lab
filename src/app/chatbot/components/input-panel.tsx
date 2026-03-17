@@ -10,10 +10,12 @@ import { sendMessage } from '../lib/chat';
 export function InputPanel() {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { isStreaming, clearMessages, messages, modelParams } = useChatStore();
+  const { isStreaming, isCompressing, clearMessages, messages, modelParams } = useChatStore();
+
+  const isDisabled = isStreaming || isCompressing;
 
   const handleSend = async () => {
-    if (!input.trim() || isStreaming) return;
+    if (!input.trim() || isDisabled) return;
 
     const userMessage = input.trim();
     setInput('');
@@ -43,15 +45,15 @@ export function InputPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="输入消息... (Shift+Enter 换行, Enter 发送)"
-          disabled={isStreaming}
+          placeholder={isCompressing ? "压缩中，请稍候..." : "输入消息... (Shift+Enter 换行, Enter 发送)"}
+          disabled={isDisabled}
           className="min-h-[44px] max-h-32 resize-none"
           rows={1}
         />
         <div className="flex flex-col gap-2">
           <Button
             onClick={handleSend}
-            disabled={!input.trim() || isStreaming}
+            disabled={!input.trim() || isDisabled}
             size="icon"
           >
             {isStreaming ? (
@@ -64,7 +66,7 @@ export function InputPanel() {
             onClick={clearMessages}
             variant="outline"
             size="icon"
-            disabled={isStreaming}
+            disabled={isDisabled}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -72,7 +74,7 @@ export function InputPanel() {
       </div>
       <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          提示: 消息会按 Messages 数组格式发送给 LLM API
+          {isCompressing ? "正在压缩上下文..." : "提示: 消息会按 Messages 数组格式发送给 LLM API"}
         </span>
         <span>{input.length} 字符</span>
       </div>

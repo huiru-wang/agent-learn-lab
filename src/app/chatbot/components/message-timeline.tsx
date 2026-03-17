@@ -5,7 +5,7 @@ import { useChatStore, type Message, type RequestLog } from '../lib/store';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { User, Bot, Settings, X, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { User, Bot, Settings, X, ArrowUpRight, ArrowDownLeft, FileText, Minimize2 } from 'lucide-react';
 
 interface LogDialogProps {
   isOpen: boolean;
@@ -87,21 +87,46 @@ function MessageItem({ message }: { message: Message }) {
     return message.responseLogIds?.includes(log.id);
   });
 
+  if (message.isSummary) {
+    return (
+      <div className="flex gap-3 p-4 rounded-lg bg-blue-500/5 border border-blue-500/30">
+        <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-blue-500 text-white">
+          <FileText className="h-4 w-4" />
+        </div>
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center gap-2 text-xs text-blue-600">
+            <FileText className="h-3 w-3" />
+            <span className="font-medium">压缩摘要</span>
+            {message.tokenCount && (
+              <span className="text-xs bg-blue-500/20 px-1.5 py-0.5 rounded">
+                {message.tokenCount} tokens
+              </span>
+            )}
+          </div>
+          <div className="text-sm whitespace-pre-wrap text-blue-900/80 bg-blue-500/10 p-3 rounded-lg">
+            {message.content}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div
         className={cn(
-          'flex gap-3 p-4 rounded-lg',
-          message.role === 'user' ? 'flex-row-reverse' : ''
+          'flex gap-3 p-4 rounded-lg transition-all',
+          message.role === 'user' ? 'flex-row-reverse' : '',
+          message.isCompressed && 'opacity-50 bg-gray-500/5'
         )}
       >
         <div
           className={cn(
             'flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center',
-            roleColors[message.role]
+            message.isCompressed ? 'bg-gray-400 text-gray-100' : roleColors[message.role]
           )}
         >
-          {roleIcons[message.role]}
+          {message.isCompressed ? <Minimize2 className="h-4 w-4" /> : roleIcons[message.role]}
         </div>
         <div
           className={cn(
@@ -113,14 +138,20 @@ function MessageItem({ message }: { message: Message }) {
             'flex items-center gap-2 text-xs text-muted-foreground',
             message.role === 'user' ? 'justify-end' : ''
           )}>
+            {message.isCompressed && (
+              <span className="bg-gray-500/20 px-1.5 py-0.5 rounded text-gray-500">已压缩</span>
+            )}
             <span className="font-medium">{message.role}</span>
             <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
             {message.tokenCount && (
-              <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
+              <span className={cn(
+                "text-xs px-1.5 py-0.5 rounded",
+                message.isCompressed ? "bg-gray-500/20 text-gray-500" : "bg-muted"
+              )}>
                 {message.tokenCount} tokens
               </span>
             )}
-            {message.role === 'user' && message.requestLogId && (
+            {!message.isCompressed && message.role === 'user' && message.requestLogId && (
               <Button
                 variant="outline"
                 size="sm"
@@ -133,7 +164,7 @@ function MessageItem({ message }: { message: Message }) {
                 request
               </Button>
             )}
-            {message.role === 'assistant' && message.responseLogIds && message.responseLogIds.length > 0 && (
+            {!message.isCompressed && message.role === 'assistant' && message.responseLogIds && message.responseLogIds.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -150,7 +181,8 @@ function MessageItem({ message }: { message: Message }) {
           <div
             className={cn(
               'text-sm whitespace-pre-wrap',
-              message.role === 'user' ? 'bg-primary/10 p-3 rounded-lg inline-block' : ''
+              message.role === 'user' ? 'bg-primary/10 p-3 rounded-lg inline-block' : '',
+              message.isCompressed && 'line-through decoration-gray-400'
             )}
           >
             {message.content}
