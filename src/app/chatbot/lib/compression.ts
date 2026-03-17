@@ -15,9 +15,7 @@ export function compressMessages(
   mode: CompressionMode,
   contextLimit: number
 ): CompressionResult {
-  const totalTokens = messages.reduce((sum, m) => sum + (m.tokenCount || estimateTokens(m.content)), 0);
-
-  if (totalTokens <= contextLimit * 0.9) {
+  if (messages.length < 4) {
     return { messages, compressedMessages: [], compressedIds: [] };
   }
 
@@ -33,6 +31,24 @@ export function compressMessages(
     default:
       return { messages, compressedMessages: [], compressedIds: [] };
   }
+}
+
+export function canCompress(
+  messages: Message[],
+  contextLimit: number
+): { canCompress: boolean; reason: string } {
+  const totalTokens = messages.reduce((sum, m) => sum + (m.tokenCount || estimateTokens(m.content)), 0);
+  const usagePercent = (totalTokens / contextLimit) * 100;
+
+  if (messages.length < 4) {
+    return { canCompress: false, reason: `消息数量不足（当前 ${messages.length} 条，需要至少 4 条）` };
+  }
+
+  if (usagePercent < 60) {
+    return { canCompress: false, reason: `上下文使用率较低（当前 ${usagePercent.toFixed(1)}%，建议 60% 以上）` };
+  }
+
+  return { canCompress: true, reason: '' };
 }
 
 function slidingWindowCompression(

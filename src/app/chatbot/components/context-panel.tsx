@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, Zap, AlertTriangle, User, Bot, Settings, FileText, Loader2 } from 'lucide-react';
-import { estimateTokens, getCompressionModeLabel } from '../lib/compression';
+import { ChevronDown, ChevronUp, Zap, AlertTriangle, User, Bot, Settings, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { estimateTokens, getCompressionModeLabel, canCompress } from '../lib/compression';
 
 export function ContextPanel() {
   const {
@@ -21,6 +21,7 @@ export function ContextPanel() {
   } = useChatStore();
   const [showMessages, setShowMessages] = useState(true);
   const [showCompressed, setShowCompressed] = useState(false);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   const inputTokens = messages.reduce((acc, m) => {
     if (m.role === 'user' || m.role === 'system') {
@@ -59,9 +60,18 @@ export function ContextPanel() {
   const handleCompress = async () => {
     if (messages.length === 0 || isCompressing) return;
 
+    setAlertMessage(null);
+
+    const check = canCompress(messages, contextLimit);
+    if (!check.canCompress) {
+      setAlertMessage(check.reason);
+      setTimeout(() => setAlertMessage(null), 3000);
+      return;
+    }
+
     setIsCompressing(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     const { compressMessages } = await import('../lib/compression');
     const result = compressMessages(messages, modelParams.compressionMode, contextLimit);
@@ -198,6 +208,13 @@ export function ContextPanel() {
                 </div>
               </ScrollArea>
             )}
+          </div>
+        )}
+
+        {alertMessage && (
+          <div className="p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs flex items-center gap-2">
+            <AlertCircle className="h-3 w-3 text-yellow-600 flex-shrink-0" />
+            <span className="text-yellow-700">{alertMessage}</span>
           </div>
         )}
 
