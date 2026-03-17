@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { streamText, generateText } from 'ai';
-import { getModel, getModelConfigById } from '@/lib/llm-client';
 import { z } from 'zod';
+import { getModelConfigById } from '@/lib/config';
+import {
+  chatCompletion,
+  chatCompletionStream,
+  type ChatMessage,
+} from '../../lib/llm-client';
 
 const RequestSchema = z.object({
   messages: z.array(
@@ -29,40 +33,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { messages, model, temperature, maxTokens, topP, stream } = parsed.data;
+    const { messages, model: modelId, temperature, maxTokens, topP, stream } = parsed.data;
 
-    const modelConfig = await getModelConfigById(model);
+    const modelConfig = await getModelConfigById(modelId);
     if (!modelConfig) {
       return NextResponse.json(
-        { error: `Model not found: ${model}` },
+        { error: `Model not found: ${modelId}` },
         { status: 400 }
       );
     }
 
-    const languageModel = await getModel(model);
-
-    const commonParams = {
-      model: languageModel,
-      messages,
-      temperature,
-      maxTokens,
-      topP,
-    };
+    const chatMessages: ChatMessage[] = messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
 
     if (stream) {
-      const result = streamText(commonParams);
       const encoder = new TextEncoder();
-
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
-            for await (const chunk of result.fullStream) {
-              const data = JSON.stringify(chunk);
+            for await (const event of chatCompletionStream({
+              model: modelConfig,
+              messages: chatMessages,
+              temperature,
+              maxTokens,
+              topP,
+            })) {
+              const data = JSON.stringify(event);
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             }
             controller.close();
           } catch (error) {
-            controller.error(error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            const errorEvent = {
+              type: 'error',
+              data: { error: errorMessage },
+            };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
+            controller.close();
           }
         },
       });
@@ -75,14 +84,16 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
-      const result = await generateText(commonParams);
-
-      return NextResponse.json({
-        text: result.text,
-        usage: result.usage,
-        finishReason: result.finishReason,
-        response: result.response,
+      const result = await chatCompletion({
+        model: modelConfig,
+        messages: chatMessages,
+        temperature,
+        maxTokens,
+        topP,
+        stream: false,
       });
+
+      return NextResponse.json(result);
     }
   } catch (error) {
     console.error('Chat API error:', error);
