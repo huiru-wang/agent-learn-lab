@@ -4,7 +4,6 @@ import { MessageTimeline } from './components/message-timeline';
 import { ParamControls } from './components/param-controls';
 import { TokenCounter } from './components/token-counter';
 import { RequestInspector } from './components/request-inspector';
-import { MessageStructure } from './components/message-structure';
 import { InputPanel } from './components/input-panel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,10 +30,6 @@ export default function ChatbotPage() {
           <div className="flex-1 flex flex-col">
             <MessageTimeline />
             <InputPanel />
-          </div>
-          
-          <div className="w-80 border-l bg-muted/10">
-            <MessageStructure />
           </div>
         </div>
       </div>

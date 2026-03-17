@@ -63,29 +63,14 @@ export async function sendMessage(
 
     const decoder = new TextDecoder();
     let fullContent = '';
-    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('0:')) {
-          const content = line.slice(2);
-          try {
-            const decoded = JSON.parse(content);
-            fullContent += decoded;
-            store.setCurrentStreamContent(fullContent);
-          } catch {
-            fullContent += content.replace(/^"|"$/g, '').replace(/\\n/g, '\n');
-            store.setCurrentStreamContent(fullContent);
-          }
-        }
-      }
+      const text = decoder.decode(value, { stream: true });
+      fullContent += text;
+      store.setCurrentStreamContent(fullContent);
     }
 
     const tokenCount = estimateTokens(fullContent);
