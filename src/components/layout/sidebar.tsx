@@ -40,7 +40,7 @@ const navigation: Navigation[] = [
   {
     category: '基础篇',
     items: [
-      { name: 'Chatbot基础', href: '/chatbot', icon: MessageSquare },
+      { name: 'Chatbot', href: '/chatbot', icon: MessageSquare },
       { name: 'Prompt设计', href: '/prompt-engineering', icon: FileText },
       { name: 'Tool Call', href: '/tool-call', icon: Wrench },
     ],

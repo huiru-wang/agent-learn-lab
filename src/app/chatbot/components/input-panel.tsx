@@ -10,19 +10,13 @@ import { sendMessage } from '../lib/chat';
 export function InputPanel() {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { isStreaming, clearMessages, messages, modelParams, addMessage } = useChatStore();
+  const { isStreaming, clearMessages, messages, modelParams } = useChatStore();
 
   const handleSend = async () => {
     if (!input.trim() || isStreaming) return;
 
     const userMessage = input.trim();
     setInput('');
-
-    addMessage({
-      role: 'user',
-      content: userMessage,
-      tokenCount: Math.ceil(userMessage.length / 4),
-    });
 
     await sendMessage(userMessage, messages, modelParams);
   };

@@ -65,6 +65,14 @@ export async function sendMessage(
   store.setIsStreaming(true);
   store.setCurrentStreamContent('');
 
+  const tokenCount = estimateTokens(input);
+  
+  store.addMessage({
+    role: 'user',
+    content: input,
+    tokenCount,
+  });
+
   const messages = [...previousMessages, { role: 'user' as const, content: input }]
     .filter((m) => m.role !== 'system' || m.content)
     .map((m) => ({
@@ -102,6 +110,9 @@ export async function sendMessage(
       let buffer = '';
       let totalUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined;
 
+      let requestLogId: string | undefined;
+      const responseLogIds: string[] = [];
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -112,15 +123,20 @@ export async function sendMessage(
 
         for (const event of events) {
           if (event.type === 'request' && event.data.request) {
+            const logId = `req-${Date.now()}`;
+            requestLogId = logId;
             store.addRequestLog({
-              id: `req-${Date.now()}`,
+              id: logId,
               timestamp: startTime,
               type: 'request',
               data: event.data.request,
             });
+            store.updateLastMessageRequestLogId(logId);
           } else if (event.type === 'chunk' && event.data.chunk) {
+            const logId = `chunk-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            responseLogIds.push(logId);
             store.addRequestLog({
-              id: `chunk-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              id: logId,
               timestamp: Date.now(),
               type: 'response',
               data: event.data.chunk,
@@ -142,52 +158,52 @@ export async function sendMessage(
         }
       }
 
-      const tokenCount = totalUsage?.completion_tokens || estimateTokens(fullContent);
+      const assistantTokenCount = totalUsage?.completion_tokens || estimateTokens(fullContent);
 
       store.addMessage({
         role: 'assistant',
         content: fullContent,
-        tokenCount,
-      });
-
-      store.addRequestLog({
-        id: `res-${Date.now()}`,
-        timestamp: Date.now(),
-        type: 'response',
-        data: {
-          summary: 'Stream completed',
-          totalContent: fullContent,
-          usage: totalUsage,
-        },
-        duration: Date.now() - startTime,
+        tokenCount: assistantTokenCount,
+        requestLogId,
+        responseLogIds,
       });
     } else {
       const result = await response.json();
-      const { request, response: responseLog, text, usage, finish_reason } = result;
+      const { request, response: responseLog, text, usage } = result;
+
+      let requestLogId: string | undefined;
+      const responseLogIds: string[] = [];
 
       if (request) {
+        const logId = `req-${Date.now()}`;
+        requestLogId = logId;
         store.addRequestLog({
-          id: `req-${Date.now()}`,
+          id: logId,
           timestamp: startTime,
           type: 'request',
           data: request,
         });
+        store.updateLastMessageRequestLogId(logId);
       }
 
+      const responseLogId = `res-${Date.now()}`;
+      responseLogIds.push(responseLogId);
       store.addRequestLog({
-        id: `res-${Date.now()}`,
+        id: responseLogId,
         timestamp: Date.now(),
         type: 'response',
         data: responseLog,
         duration: Date.now() - startTime,
       });
 
-      const tokenCount = usage?.completion_tokens || estimateTokens(text || '');
+      const assistantTokenCount = usage?.completion_tokens || estimateTokens(text || '');
 
       store.addMessage({
         role: 'assistant',
         content: text || '',
-        tokenCount,
+        tokenCount: assistantTokenCount,
+        requestLogId,
+        responseLogIds,
       });
     }
   } catch (error) {
@@ -195,16 +211,6 @@ export async function sendMessage(
     store.addMessage({
       role: 'assistant',
       content: `Error: ${errorMessage}`,
-    });
-
-    store.addRequestLog({
-      id: `err-${Date.now()}`,
-      timestamp: Date.now(),
-      type: 'response',
-      data: {
-        error: errorMessage,
-      },
-      duration: Date.now() - startTime,
     });
   } finally {
     store.setIsStreaming(false);

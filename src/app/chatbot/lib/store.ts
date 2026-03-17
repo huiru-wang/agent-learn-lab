@@ -6,6 +6,8 @@ export interface Message {
   content: string;
   timestamp: number;
   tokenCount?: number;
+  requestLogId?: string;
+  responseLogIds?: string[];
 }
 
 export interface AvailableModel {
@@ -35,6 +37,7 @@ interface ChatState {
   
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateLastMessage: (content: string) => void;
+  updateLastMessageRequestLogId: (logId: string) => void;
   setModelParams: (params: Partial<ModelParams>) => void;
   setIsStreaming: (streaming: boolean) => void;
   setCurrentStreamContent: (content: string) => void;
@@ -87,6 +90,18 @@ export const useChatStore = create<ChatState>((set) => ({
         messages[messages.length - 1] = {
           ...messages[messages.length - 1],
           content,
+        };
+      }
+      return { messages };
+    }),
+
+  updateLastMessageRequestLogId: (logId) =>
+    set((state) => {
+      const messages = [...state.messages];
+      if (messages.length > 0) {
+        messages[messages.length - 1] = {
+          ...messages[messages.length - 1],
+          requestLogId: logId,
         };
       }
       return { messages };
