@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useChatStore, type CompressionMode } from '../lib/store';
+import { useChatStore } from '../lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import {
@@ -14,12 +14,9 @@ import {
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Loader2 } from 'lucide-react';
-import { getCompressionModeLabel, getCompressionModeDescription } from '../lib/compression';
-
-const COMPRESSION_MODES: CompressionMode[] = ['sliding-window', 'summary', 'importance', 'hierarchical'];
 
 export function ParamControls() {
-  const { modelParams, setModelParams, setCompressionMode, availableModels, modelsLoaded, setAvailableModels } = useChatStore();
+  const { modelParams, setModelParams, availableModels, modelsLoaded, setAvailableModels } = useChatStore();
 
   useEffect(() => {
     if (!modelsLoaded) {
@@ -103,54 +100,10 @@ export function ParamControls() {
               setModelParams({ maxTokens: v });
             }}
             min={64}
-            max={1024}
+            max={512}
             step={64}
             className="py-2"
           />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs">Top P</Label>
-            <span className="text-xs text-muted-foreground font-mono">
-              {modelParams.topP.toFixed(2)}
-            </span>
-          </div>
-          <Slider
-            value={[modelParams.topP]}
-            onValueChange={(values) => {
-              const v = Array.isArray(values) ? values[0] : values;
-              setModelParams({ topP: v });
-            }}
-            min={0}
-            max={1}
-            step={0.01}
-            className="py-2"
-          />
-          <p className="text-xs text-muted-foreground">
-            核采样参数，与 temperature 二选一
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <Label className="text-xs">压缩方式</Label>
-          <Select
-            value={modelParams.compressionMode}
-            onValueChange={(value) => setCompressionMode(value as CompressionMode)}
-          >
-            <SelectTrigger className="h-7 w-28 text-xs">
-              <SelectValue>
-                {getCompressionModeLabel(modelParams.compressionMode)}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {COMPRESSION_MODES.map((mode) => (
-                <SelectItem key={mode} value={mode} className="text-xs">
-                  {getCompressionModeLabel(mode)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
         <div className="flex items-center justify-between">

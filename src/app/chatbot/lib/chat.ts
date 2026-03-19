@@ -4,6 +4,48 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+function calculateTotalTokens(messages: Message[]): number {
+  return messages.reduce((acc, m) => acc + (m.tokenCount || estimateTokens(m.content)), 0);
+}
+
+function calculateActiveTokens(messages: Message[]): number {
+  return messages
+    .filter(m => !m.isPruned)
+    .reduce((acc, m) => acc + (m.tokenCount || estimateTokens(m.content)), 0);
+}
+
+function applySlidingWindow(messages: Message[], contextMaxTokens: number): { prunedIds: string[]; remaining: Message[] } {
+  const triggerThreshold = contextMaxTokens * 0.6;
+  const targetThreshold = contextMaxTokens * 0.4;
+
+  const activeMessages = messages.filter(m => !m.isPruned);
+  const totalTokens = calculateActiveTokens(activeMessages);
+  
+  if (totalTokens <= triggerThreshold) {
+    return { prunedIds: [], remaining: messages };
+  }
+
+  const sortedMessages = [...activeMessages].sort((a, b) => b.timestamp - a.timestamp);
+  const prunedIds: string[] = [];
+  const kept: Message[] = [];
+
+  for (const msg of sortedMessages) {
+    const currentTokens = calculateActiveTokens(kept);
+    
+    if (currentTokens < targetThreshold) {
+      kept.push(msg);
+    } else {
+      prunedIds.push(msg.id);
+    }
+  }
+
+  const keptIds = new Set(kept.map(m => m.id));
+  return { 
+    prunedIds, 
+    remaining: messages.filter(m => keptIds.has(m.id) || m.isPruned)
+  };
+}
+
 interface SSEEvent {
   type: 'request' | 'chunk' | 'done' | 'error';
   data: {
@@ -73,7 +115,19 @@ export async function sendMessage(
     tokenCount,
   });
 
-  const messages = [...previousMessages, { role: 'user' as const, content: input }]
+  const allMessages: Message[] = [...previousMessages, { role: 'user', content: input, timestamp: Date.now(), id: 'temp' }];
+  
+  const { contextMaxTokens } = useChatStore.getState();
+  const { prunedIds, remaining: filteredMessages } = applySlidingWindow(allMessages, contextMaxTokens);
+  
+  if (prunedIds.length > 0) {
+    store.setIsCompressing(true);
+    store.pruneMessages(prunedIds);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    store.setIsCompressing(false);
+  }
+
+  const messages = filteredMessages
     .filter((m) => m.role !== 'system' || m.content)
     .map((m) => ({
       role: m.role as 'system' | 'user' | 'assistant',
@@ -89,7 +143,6 @@ export async function sendMessage(
         messages,
         temperature: params.temperature,
         maxTokens: params.maxTokens,
-        topP: params.topP,
         stream: params.stream,
       }),
     });
@@ -118,8 +171,8 @@ export async function sendMessage(
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const { events, remaining } = parseSSEEvents(buffer);
-        buffer = remaining;
+        const { events, remaining: remBuffer } = parseSSEEvents(buffer);
+        buffer = remBuffer;
 
         for (const event of events) {
           if (event.type === 'request' && event.data.request) {

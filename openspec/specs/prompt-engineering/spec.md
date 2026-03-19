@@ -1,0 +1,112 @@
+# Prompt Engineering
+
+## 文档 API
+
+### Requirement: 获取文档列表 API
+
+系统应当提供 API 返回 docs/ 目录下的文档列表。
+
+#### Scenario: 获取列表
+
+- **WHEN** GET /{module}/api/docs
+- **THEN** 返回文档列表，按文件名排序，最多 10 个
+
+#### Scenario: 返回格式
+
+- **WHEN** 请求成功
+- **THEN** 返回 { docs: [{ name: string, title: string }] }
+
+### Requirement: 获取单个文档 API
+
+系统应当提供 API 返回指定文档的内容。
+
+#### Scenario: 获取文档
+
+- **WHEN** GET /{module}/api/docs/{name}
+- **THEN** 返回对应 Markdown 文件内容
+
+#### Scenario: 文档不存在
+
+- **WHEN** 请求的文档不存在
+- **THEN** 返回 404 错误
+
+## UI 设计
+
+### Requirement: 多 Tab 文档展示
+
+系统应当支持多个文档 Tab，点击切换显示不同文档内容。
+
+#### Scenario: 显示 Tab 列表
+
+- **WHEN** 组件渲染
+- **THEN** 自动扫描 docs/ 目录，生成 Tab 列表
+
+#### Scenario: Tab 切换
+
+- **WHEN** 用户点击 Tab
+- **THEN** 加载对应文档内容并显示
+
+#### Scenario: Tab 名称生成
+
+- **WHEN** 生成 Tab 列表
+- **THEN** 从文件名提取名称：去掉序号和 .md 后缀
+
+### Requirement: 文档扫描
+
+系统应当自动扫描 docs/ 目录获取文档列表，最多加载 10 个文档。
+
+#### Scenario: 扫描文档
+
+- **WHEN** 组件挂载
+- **THEN** 调用 API 获取文档列表，按文件名排序
+
+#### Scenario: 文档数量限制
+
+- **WHEN** 文档数量超过 10 个
+- **THEN** 只显示前 10 个
+
+### Requirement: Markdown 渲染
+
+系统应当支持 Markdown 内容渲染，包括代码高亮。
+
+#### Scenario: 渲染内容
+
+- **WHEN** 文档加载完成
+- **THEN** 渲染 Markdown 内容，代码块语法高亮
+
+### Requirement: 目录导航
+
+系统应当在右侧显示文档目录，支持点击跳转。
+
+#### Scenario: 显示目录
+
+- **WHEN** 文档加载完成
+- **THEN** 提取 h1-h3 标题显示在右侧
+
+#### Scenario: 目录跳转
+
+- **WHEN** 用户点击目录项
+- **THEN** 页面滚动到对应标题位置
+
+### Requirement: 目录固定在右侧
+
+目录区应当固定在右侧，内容区滚动时目录保持可见。
+
+#### Scenario: 目录固定
+
+- **WHEN** 页面滚动
+- **THEN** 目录区固定不动，内容区独立滚动
+
+### Requirement: 文档区支持 Markdown 表格
+
+文档区 SHALL 支持 GFM 表格渲染，包括表头、表体、单元格样式。
+
+#### Scenario: 渲染 Markdown 表格
+
+- **WHEN** 文档包含 Markdown 表格语法
+- **THEN** 系统渲染为样式化的 HTML 表格
+
+#### Scenario: 表格响应式
+
+- **WHEN** 表格宽度超出容器
+- **THEN** 表格可水平滚动

@@ -51,7 +51,6 @@ export function MessageStructure() {
                       messages: messagesAsJSON,
                       temperature: modelParams.temperature,
                       max_tokens: modelParams.maxTokens,
-                      top_p: modelParams.topP,
                       stream: modelParams.stream,
                     },
                     null,

@@ -1,7 +1,5 @@
 import { create } from 'zustand';
 
-export type CompressionMode = 'sliding-window' | 'summary' | 'importance' | 'hierarchical';
-
 export interface Message {
   id: string;
   role: 'system' | 'user' | 'assistant';
@@ -10,19 +8,7 @@ export interface Message {
   tokenCount?: number;
   requestLogId?: string;
   responseLogIds?: string[];
-  isCompressed?: boolean;
-  isSummary?: boolean;
-  originalContent?: string;
-  importanceScore?: number;
-}
-
-export interface CompressedMessage {
-  id: string;
-  originalIds: string[];
-  summary: string;
-  timestamp: number;
-  tokenCount: number;
-  originalTokenCount: number;
+  isPruned?: boolean;
 }
 
 export interface AvailableModel {
@@ -36,9 +22,7 @@ export interface ModelParams {
   model: string;
   temperature: number;
   maxTokens: number;
-  topP: number;
   stream: boolean;
-  compressionMode: CompressionMode;
 }
 
 interface ChatState {
@@ -50,9 +34,8 @@ interface ChatState {
   requestLog: RequestLog[];
   availableModels: AvailableModel[];
   modelsLoaded: boolean;
-  compressedMessages: CompressedMessage[];
-  contextLimit: number;
   isCompressing: boolean;
+  contextMaxTokens: number;
   
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateLastMessage: (content: string) => void;
@@ -64,11 +47,8 @@ interface ChatState {
   clearMessages: () => void;
   addRequestLog: (log: RequestLog) => void;
   setAvailableModels: (models: AvailableModel[]) => void;
-  setCompressedMessages: (messages: CompressedMessage[]) => void;
-  setContextLimit: (limit: number) => void;
-  setCompressionMode: (mode: CompressionMode) => void;
   setIsCompressing: (compressing: boolean) => void;
-  applyCompression: (retained: Message[], compressed: CompressedMessage[]) => void;
+  pruneMessages: (prunedIds: string[]) => void;
 }
 
 export interface RequestLog {
@@ -85,9 +65,7 @@ export const useChatStore = create<ChatState>((set) => ({
     model: '',
     temperature: 0.7,
     maxTokens: 512,
-    topP: 1,
     stream: true,
-    compressionMode: 'sliding-window',
   },
   isStreaming: false,
   currentStreamContent: '',
@@ -95,9 +73,8 @@ export const useChatStore = create<ChatState>((set) => ({
   requestLog: [],
   availableModels: [],
   modelsLoaded: false,
-  compressedMessages: [],
-  contextLimit: 1024,
   isCompressing: false,
+  contextMaxTokens: 1024,
 
   addMessage: (message) =>
     set((state) => ({
@@ -176,25 +153,12 @@ export const useChatStore = create<ChatState>((set) => ({
       };
     }),
 
-  setCompressedMessages: (messages) => set({ compressedMessages: messages }),
-
-  setContextLimit: (limit) => set({ contextLimit: limit }),
-
-  setCompressionMode: (mode) =>
-    set((state) => ({
-      modelParams: { ...state.modelParams, compressionMode: mode },
-      messages: [],
-      compressedMessages: [],
-      totalTokens: 0,
-      currentStreamContent: '',
-      requestLog: [],
-    })),
-
   setIsCompressing: (compressing) => set({ isCompressing: compressing }),
 
-  applyCompression: (messages, compressed) =>
+  pruneMessages: (prunedIds) =>
     set((state) => ({
-      messages,
-      compressedMessages: [...state.compressedMessages, ...compressed],
+      messages: state.messages.map((msg) =>
+        prunedIds.includes(msg.id) ? { ...msg, isPruned: true } : msg
+      ),
     })),
 }));

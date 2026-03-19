@@ -36,7 +36,7 @@ const learningPath = [
         href: '/prompt-engineering',
         icon: FileText,
         description: 'System Prompt、Few-shot、提示词模板',
-        status: 'todo',
+        status: 'done',
       },
       {
         title: 'Tool Call',
