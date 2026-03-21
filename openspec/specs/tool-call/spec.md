@@ -1,4 +1,4 @@
-# Tool Call
+# Tool Call Module
 
 ## 学习目标
 
@@ -6,7 +6,7 @@
 - 学会定义和注册工具
 - 掌握多工具编排策略
 
-## UI 设计
+## 模块布局
 
 ### Requirement: 页面顶部 Tab 切换
 
@@ -22,138 +22,160 @@
 - **WHEN** 页面加载
 - **THEN** 默认显示演示区
 
-### Requirement: 可用工具列表
+## 演示区布局
 
-系统应当在演示区顶部显示可用工具列表，支持勾选启用/禁用，并支持添加工具。
+### Requirement: 左右分栏布局
 
-#### Scenario: 显示工具列表
+系统应当在演示区采用左右分栏布局：左侧为对话区和工具列表，右侧为执行轨迹。
+
+#### Scenario: 60/40 分栏
 
 - **WHEN** 演示区渲染
-- **THEN** 显示已配置的工具列表（天气查询、计算器、搜索等）
+- **THEN** 左侧占 60% 宽度（对话 + 工具），右侧占 40%（执行轨迹）
 
-#### Scenario: 添加工具
+## 工具定义
 
-- **WHEN** 用户点击「添加工具」
-- **THEN** 打开工具定义编辑器
+### Requirement: get_time 工具
 
-#### Scenario: 启用/禁用工具
+系统 SHALL 提供一个内置的 get_time 工具，支持获取指定时区的当前时间。
 
-- **WHEN** 用户勾选/取消勾选工具
-- **THEN** 该工具在后续调用中启用/禁用
+#### Scenario: get_time 工具 Schema
 
-## 工具定义编辑器
+- **WHEN** API 接收请求
+- **THEN** 工具定义为 OpenAI function calling 格式：
+  - name: `get_time`
+  - description: `获取指定时区的当前时间`
+  - parameters: `{ timezone: string (IANA 时区), format: "full" | "date" | "time" }`
 
-### Requirement: JSON Schema 编辑器
+#### Scenario: timezone 参数
 
-系统应当提供 JSON Schema 编辑器，允许用户定义工具的 name、description、parameters。
+- **WHEN** timezone 参数为空
+- **THEN** 默认使用 Asia/Shanghai
 
-#### Scenario: 编辑工具定义
+#### Scenario: format 参数
 
-- **WHEN** 用户在编辑器中输入 JSON Schema
-- **WHEN** 系统 SHALL validate the JSON structure and display validation errors inline
+- **WHEN** format 为 full
+- **THEN** 返回完整日期时间；为 date 仅返回日期；为 time 仅返回时间
 
-#### Scenario: 实时验证
+## 消息交互
 
-- **WHEN** JSON Schema 格式错误
-- **THEN** 显示红色错误提示，说明错误位置
+### Requirement: 消息发送与流式回复
 
-### Requirement: 工具参数编辑
+系统 SHALL 支持用户输入消息并接收模型流式回复。
 
-系统应当支持编辑工具的输入参数，包括类型定义和描述。
+#### Scenario: 发送消息
 
-#### Scenario: 定义参数
+- **WHEN** 用户输入「现在几点了？」并按 Enter
+- **THEN** 消息发送到 API，模型开始流式响应
 
-- **WHEN** 用户在 parameters 中定义字段
-- **THEN** 支持 type: string、number、boolean、object、array 等类型
+#### Scenario: 流式回复
 
-### Requirement: 验证工具定义
+- **WHEN** 模型产生文本片段
+- **THEN** 回复内容以流式方式逐步显示在消息区
 
-系统应当提供「验证定义」按钮，检查 JSON Schema 是否符合 OpenAI function calling 规范。
+## 执行轨迹可视化
 
-#### Scenario: 验证通过
+### Requirement: 动态事件流展示
 
-- **WHEN** JSON Schema 格式正确
-- **THEN** 显示绿色「验证通过」提示
+系统 SHALL 在右侧面板实时展示每次 LLM 请求/响应、工具调用的完整执行轨迹，每个事件作为独立步骤动态追加。
 
-#### Scenario: 验证失败
+#### Scenario: LLM Request 步骤
 
-- **WHEN** JSON Schema 格式错误
-- **THEN** 显示具体错误信息
+- **WHEN** 每轮 LLM 请求发送前
+- **THEN** 右侧追加「Round N · LLM Request」步骤，显示 Request 按钮可查看完整 request body（含 messages + tools）
 
-### Requirement: 测试调用
+#### Scenario: LLM Response 步骤
 
-系统应当提供「测试调用」按钮，使用用户定义的工具进行实际调用测试。
+- **WHEN** 每轮 LLM 响应结束
+- **THEN** 右侧追加「Round N · LLM Response」步骤，显示 Response 按钮可查看 finish_reason、tool_calls、usage
 
-#### Scenario: 触发测试
+#### Scenario: Tool Call 步骤
 
-- **WHEN** 用户点击「测试调用」
-- **THEN** 发送测试请求，观察模型如何调用工具
+- **WHEN** 模型触发工具调用
+- **THEN** 右侧追加「Tool Call: {toolName}」步骤，显示 JSON 格式的参数
 
-## 调用流程可视化
+#### Scenario: Tool Call Result 步骤
 
-### Requirement: 可视化调用链
+- **WHEN** 工具执行完成
+- **THEN** 右侧追加「Tool Call Result: {toolName}」步骤，显示执行结果
 
-系统应当在右侧面板可视化展示工具调用的完整流程。
+#### Scenario: 多轮追踪
 
-#### Scenario: 显示调用流程
+- **WHEN** 工具调用后进入下一轮 LLM 请求
+- **THEN** 再次追加新的 LLM Request / LLM Response 步骤，形成完整链路
 
-- **WHEN** 工具调用发生
-- **THEN** 右侧面板展示：User Input → LLM Reasoning → Tool Selection → Tool Execution → Result → LLM Response
+### Requirement: Request/Response 详情弹窗
 
-#### Scenario: 动画展示
+用户点击 Request 或 Response 按钮时，系统 SHALL 弹出遮罩 Dialog 展示完整数据。
 
-- **WHEN** 调用流程执行
-- **THEN** 每个步骤以动画方式依次展示
+#### Scenario: Request 详情
 
-### Requirement: 调用详情展示
+- **WHEN** 用户点击 Request 按钮
+- **THEN** Dialog 显示 JSON 格式的完整 request body（脱敏 API Key）
 
-系统应当展示每次调用的详细参数和返回结果。
+#### Scenario: Response 详情
 
-#### Scenario: 显示调用参数
+- **WHEN** 用户点击 Response 按钮
+- **THEN** Dialog 显示 finish_reason、tool_calls 列表、usage
 
-- **WHEN** 工具被调用
-- **THEN** 显示 tool name、arguments JSON、execution result
+## SSE 事件流
 
-#### Scenario: 显示模型推理
+### Requirement: SSE 事件类型
 
-- **WHEN** 模型决定调用工具
-- **THEN** 展示模型的思考过程和选择理由
+API SHALL 通过 Server-Sent Events 推送以下事件类型：
 
-## 业务逻辑
+| 事件类型 | 触发时机 | 字段 |
+|---|---|---|
+| `llm_request` | 每轮 LLM 请求发送前 | `round`, `request`（含 body） |
+| `chunk` | 模型产生文本片段 | `delta` |
+| `llm_response` | 每轮 LLM 响应结束 | `round`, `response`（含 finish_reason/tool_calls/usage） |
+| `tool_call` | 模型决定调用工具 | `toolName`, `args` |
+| `tool_result` | 工具执行完成 | `toolName`, `result` |
+| `error` | 发生错误 | `error` |
 
-### Requirement: 多工具编排
+#### Scenario: 完整事件序列（单轮工具调用）
 
-系统 SHALL 支持一次请求调用多个工具，展示并行调用和顺序调用策略。
+```
+llm_request → chunk (×N) → llm_response → tool_call → tool_result → [下一轮 llm_request → ...]
+```
 
-#### Scenario: 并行调用
+## LLM Client
 
-- **WHEN** 用户输入涉及多个工具
-- **THEN** 模型可同时调用多个工具
+### Requirement: 原生 Fetch 实现
 
-#### Scenario: 顺序调用
+系统 SHALL 使用原生 fetch 而非 AI SDK 实现 LLM 调用，以获取完整的 request/response 日志。
 
-- **WHEN** 工具 B 依赖工具 A 的结果
-- **THEN** 模型按依赖顺序依次调用
+#### Scenario: 全局 llm-client
 
-### Requirement: 工具执行
+- **WHEN** API route 需要调用 LLM
+- **THEN** 使用 `src/lib/llm-client.ts`（原生 fetch，支持 tools 参数）
 
-系统 SHALL 通过 Tool 定义中的 execute 函数执行工具调用，并返回结果。
+#### Scenario: OpenAI Function Calling 格式
 
-#### Scenario: 执行工具
+- **WHEN** 构建 request body
+- **THEN** `tools` 字段格式为 `{ type: 'function', function: { name, description, parameters } }`
 
-- **WHEN** 模型选择并调用工具
-- **THEN** 执行对应函数，返回结果给模型
+## 文档展示
 
-#### Scenario: 工具执行错误
+### Requirement: 文档 Tab
 
-- **WHEN** 工具执行抛出异常
-- **THEN** 返回错误信息给模型，模型尝试修复或给出错误回答
+系统 SHALL 在文档 Tab 中渲染 Markdown 格式的模块说明文档。
+
+#### Scenario: 显示文档
+
+- **WHEN** 用户切换到文档 Tab
+- **THEN** 渲染 tool-call/docs/index.md 内容
+
+#### Scenario: 文档不存在
+
+- **WHEN** docs/index.md 不存在
+- **THEN** 显示「暂无文档」
 
 ## 核心概念
 
 | 概念 | 说明 |
 |---|---|
-| Tool Definition | JSON Schema 定义工具参数 |
-| Tool Selection | 模型自动选择合适的工具 |
-| Parallel Calling | 一次请求调用多个工具 |
-| Tool Result | 工具执行结果返回给模型 |
+| Function Calling | 模型通过 tool_calls 输出决定调用工具 |
+| Agentic Loop | LLM → tool_call → tool_result → LLM → ... 的多轮循环 |
+| SSE Streaming | 服务端推送事件，客户端实时更新 UI |
+| OpenAI Function Calling | 通过 tools 参数声明可用工具，tool_calls 返回调用结果 |

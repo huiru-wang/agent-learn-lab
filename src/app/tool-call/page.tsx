@@ -1,32 +1,50 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Wrench, Construction } from 'lucide-react';
+'use client';
+
+import { useState } from 'react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ToolList } from './components/tool-list';
+import { ChatArea } from './components/chat-area';
+import { ExecutionTrace } from './components/execution-trace';
+import { DocsPanel } from '../chatbot/components/docs-panel';
 
 export default function ToolCallPage() {
+  const [activeTab, setActiveTab] = useState('demo');
+
   return (
-    <div className="h-screen flex items-center justify-center p-8">
-      <Card className="max-w-md w-full">
-        <CardHeader className="text-center">
-          <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <Wrench className="h-8 w-8 text-primary" />
+    <div className="h-screen flex flex-col overflow-hidden">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+        <div className="border-b px-4 py-2 bg-muted/30">
+          <TabsList className="h-9">
+            <TabsTrigger value="demo" className="text-base font-medium">演示</TabsTrigger>
+            <TabsTrigger value="docs" className="text-base font-medium">文档</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="demo" className="flex-1 m-0 p-0 overflow-hidden">
+          <div className="flex h-full overflow-hidden">
+            {/* 左侧：工具卡片 + 聊天区 (60%) */}
+            <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '60%', maxWidth: '60%' }}>
+              {/* 工具卡片 */}
+              <div className="px-4 pt-4 pb-3 border-b bg-muted/5 flex-shrink-0">
+                <ToolList />
+              </div>
+              {/* 聊天区 */}
+              <div className="flex-1 overflow-hidden">
+                <ChatArea />
+              </div>
+            </div>
+
+            {/* 右侧：执行轨迹 (40%) */}
+            <div className="flex-shrink-0 overflow-hidden" style={{ flexBasis: '40%', width: '40%' }}>
+              <ExecutionTrace />
+            </div>
           </div>
-          <CardTitle>Tool Call</CardTitle>
-          <CardDescription>函数定义、参数解析、调用流程</CardDescription>
-          <Badge variant="outline" className="mx-auto mt-2">
-            <Construction className="h-3 w-3 mr-1" />
-            开发中
-          </Badge>
-        </CardHeader>
-        <CardContent className="text-center text-sm text-muted-foreground">
-          <p>本章节将演示：</p>
-          <ul className="mt-2 text-left space-y-1">
-            <li>• Function Calling 的 JSON Schema 定义</li>
-            <li>• 参数解析与验证流程</li>
-            <li>• Tool 调用的完整生命周期</li>
-            <li>• 多 Tool 协作与结果聚合</li>
-          </ul>
-        </CardContent>
-      </Card>
+        </TabsContent>
+
+        <TabsContent value="docs" className="flex-1 m-0 p-0 overflow-hidden">
+          <DocsPanel modulePath="/tool-call" />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

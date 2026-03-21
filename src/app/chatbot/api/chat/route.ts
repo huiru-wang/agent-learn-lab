@@ -5,7 +5,7 @@ import {
   chatCompletion,
   chatCompletionStream,
   type ChatMessage,
-} from '../../lib/llm-client';
+} from '@/lib/llm-client';
 
 const RequestSchema = z.object({
   messages: z.array(

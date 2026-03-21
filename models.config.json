@@ -1,0 +1,19 @@
+{
+    "models": [
+        {
+            "id": "qwen-plus",
+            "name": "qwen-plus",
+            "provider": "bailian",
+            "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "apiKey": "sk-549678f8ccee4b86994bbb741d0d9f12",
+            "model": "qwen-plus"
+        },
+        {
+            "id": "glm-4.7-flash",
+            "provider": "zhipu",
+            "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+            "apiKey": "ad02af0333c64eeabe0354788976bf6d.s5Ga9nCtlzMxPJVd",
+            "model": "glm-4.7-flash"
+        }
+    ]
+}
