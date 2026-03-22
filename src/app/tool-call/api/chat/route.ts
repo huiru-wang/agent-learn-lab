@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
                 round: llmRequestCount,
                 response: {
                   finish_reason: 'tool_calls',
+                  content: textAccumulated || undefined,
                   tool_calls: toolCallCompleteData.tool_calls,
                 },
               });
@@ -170,6 +171,7 @@ export async function POST(request: NextRequest) {
               round: llmRequestCount,
               response: {
                 finish_reason: doneData?.finish_reason || 'stop',
+                content: textAccumulated || undefined,
                 tool_calls: undefined,
                 usage: doneData?.usage,
               },

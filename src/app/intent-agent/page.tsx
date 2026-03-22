@@ -1,32 +1,59 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Brain, Construction } from 'lucide-react';
+'use client';
+
+import { useState } from 'react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { IntentList } from './components/intent-list';
+import { ChatPanel } from './components/chat-panel';
+import { ResultPanel } from './components/result-panel';
+import { DocsPanel } from '../chatbot/components/docs-panel';
 
 export default function IntentAgentPage() {
-  return (
-    <div className="h-screen flex items-center justify-center p-8">
-      <Card className="max-w-md w-full">
-        <CardHeader className="text-center">
-          <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <Brain className="h-8 w-8 text-primary" />
-          </div>
-          <CardTitle>意图识别 Agent</CardTitle>
-          <CardDescription>输入分类、置信度评估、决策树可视化</CardDescription>
-          <Badge variant="outline" className="mx-auto mt-2">
-            <Construction className="h-3 w-3 mr-1" />
-            开发中
-          </Badge>
-        </CardHeader>
-        <CardContent className="text-center text-sm text-muted-foreground">
-          <p>本章节将演示：</p>
-          <ul className="mt-2 text-left space-y-1">
-            <li>• 用户输入的特征提取</li>
-            <li>• 多分类决策过程可视化</li>
-            <li>• 置信度评分机制</li>
-            <li>• 意图到 Action 的映射</li>
-          </ul>
-        </CardContent>
-      </Card>
-    </div>
-  );
+    const [activeTab, setActiveTab] = useState('demo');
+
+    return (
+        <div className="h-screen flex flex-col overflow-hidden">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+                <div className="border-b px-4 py-2 bg-muted/30">
+                    <TabsList className="h-9">
+                        <TabsTrigger value="demo" className="text-base font-medium">演示</TabsTrigger>
+                        <TabsTrigger value="docs" className="text-base font-medium">文档</TabsTrigger>
+                    </TabsList>
+                </div>
+
+                <TabsContent value="demo" className="flex-1 m-0 p-0 overflow-hidden">
+                    <div className="flex h-full overflow-hidden">
+                        {/* 左侧 (50%): 上半意图列表 + 下半聊天区 */}
+                        <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '50%', maxWidth: '50%' }}>
+                            {/* 上半部分：预定义意图列表（auto 高度） */}
+                            <div className="flex flex-col min-h-0 border-b bg-muted/5 overflow-hidden flex-shrink-0">
+                                <div className="px-4 pt-3 pb-0 flex-shrink-0">
+                                    预定义意图
+                                </div>
+                                <div className="px-4 pt-3 pb-0 flex-shrink-0">
+                                    SystemPrompt详见文档或者请求的request
+                                </div>
+                                <div className="px-4 p-3">
+                                    <IntentList />
+                                </div>
+                            </div>
+
+                            {/* 下半部分：聊天区 */}
+                            <div className="flex-1 min-h-0 overflow-hidden">
+                                <ChatPanel />
+                            </div>
+                        </div>
+
+                        {/* 右侧 (50%): 分析结果 */}
+                        <div className="flex-shrink-0 overflow-hidden" style={{ flexBasis: '50%', width: '50%' }}>
+                            <ResultPanel />
+                        </div>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="docs" className="flex-1 m-0 p-0 overflow-hidden">
+                    <DocsPanel modulePath="/intent-agent" />
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
 }

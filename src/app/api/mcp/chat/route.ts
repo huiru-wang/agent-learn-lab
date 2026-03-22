@@ -1,66 +1,78 @@
-# MCP 协议
+import { NextRequest } from 'next/server';
+import { z } from 'zod';
+import { getModelConfigById } from '@/lib/llm-client';
+import {
+    chatCompletionStream,
+    type ChatMessage,
+    type StreamToolCallCompleteData,
+    type StreamDoneData,
+    type StreamRequestData,
+    type ToolDefinition,
+} from '@/lib/llm-client';
+import { getSession } from '@/app/mcp-protocol/lib/mcp-session';
 
-## 概述
+const RequestSchema = z.object({
+    sessionId: z.string(),
+    messages: z.array(
+        z.object({
+            role: z.enum(['user', 'assistant']),
+            content: z.string(),
+        })
+    ),
+    model: z.string(),
+});
 
-MCP（Model Context Protocol）是一种用于 LLM 与外部工具/服务通信的协议。本模块演示如何通过 MCP 协议连接远程服务器，让 LLM 在对话中动态调用远程工具。
+type SendFn = (event: Record<string, unknown>) => void;
 
-## 核心概念
-
-| 概念 | 说明 |
-|---|---|
-| MCP Server | 提供 Tools/Resources/Prompts 的远程服务端，通过 StreamableHTTP 通信 |
-| MCP Client | 连接到 MCP Server 的客户端，本模块运行在 Next.js API Routes 中 |
-| StreamableHTTP | MCP 的 HTTP 传输模式：POST（发送）+ SSE（接收） |
-| 动态工具发现 | 连接后自动获取 MCP Server 支持的工具列表，而非硬编码 |
-
-## 工作原理
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         浏览器                                    │
-│  ┌─────────────────┐              ┌──────────────────────────┐   │
-│  │  执行轨迹面板    │              │  Server Panel + Chat     │   │
-│  │  (左侧 40%)     │              │  (右侧 60%)              │   │
-│  └────────┬────────┘              └────────────┬─────────────┘   │
-└───────────┼───────────────────────────────────┼─────────────────┘
-            │                                    │
-            ▼                                    ▼
-┌───────────────────────────────────────┐  ┌─────────────────────────────┐
-│       /api/mcp/chat (SSE 流)           │  │    /api/mcp/connect        │
-│   1. 获取 MCP 工具列表                   │  │    建立 MCP Session         │
-│   2. 调用 LLM（携带工具定义）           │  └────────────┬──────────────┘  │
-│   3. LLM 决定调用工具                   │               │               │
-│   4. 通过 MCP 执行工具                  │               ▼               │
-│   5. 结果返回给 LLM                    │  ┌─────────────────────────┐ │
-│   6. LLM 整合结果回复                   │  │    Remote MCP Server     │ │
-└───────────────────────────────────────┘  │    (如 amap_weather)      │ │
-                                          └─────────────────────────┘
-```
-核心循环：
-
-```typescript
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const parsed = RequestSchema.safeParse(body);
 
-        // 提取前端请求
+        if (!parsed.success) {
+            return new Response(
+                JSON.stringify({ error: 'Invalid request', details: parsed.error.issues }),
+                { status: 400, headers: { 'Content-Type': 'application/json' } }
+            );
+        }
+
         const { sessionId, messages: inputMessages, model: modelId } = parsed.data;
+
         const session = getSession(sessionId);
+        if (!session) {
+            return new Response(
+                JSON.stringify({ error: 'MCP session not found. Please connect to a server first.' }),
+                { status: 400, headers: { 'Content-Type': 'application/json' } }
+            );
+        }
 
-        // 获取模型
         const modelConfig = await getModelConfigById(modelId);
+        if (!modelConfig) {
+            return new Response(
+                JSON.stringify({ error: `Model not found: ${modelId}` }),
+                { status: 400, headers: { 'Content-Type': 'application/json' } }
+            );
+        }
 
-        // 调用mcp listTools 获取可用tool
+        // Get MCP tools and convert to OpenAI function format
         let mcpTools: ToolDefinition[] = [];
-        const toolsResult = await session.client.listTools();
-        mcpTools = toolsResult.tools.map((tool) => ({
-            name: tool.name,
-            description: tool.description || '',
-            parameters: tool.inputSchema as Record<string, unknown>,
-        }));
+        try {
+            const toolsResult = await session.client.listTools();
+            mcpTools = toolsResult.tools.map((tool) => ({
+                name: tool.name,
+                description: tool.description || '',
+                parameters: tool.inputSchema as Record<string, unknown>,
+            }));
+        } catch (toolsError) {
+            console.error('Failed to list MCP tools:', toolsError);
+            return new Response(
+                JSON.stringify({ error: 'Failed to get tools from MCP server' }),
+                { status: 500, headers: { 'Content-Type': 'application/json' } }
+            );
+        }
 
         const encoder = new TextEncoder();
+
         const readableStream = new ReadableStream({
             async start(controller) {
                 const send: SendFn = (event) => {
@@ -68,6 +80,7 @@ export async function POST(request: NextRequest) {
                 };
 
                 try {
+                    // Build current conversation messages list (mutable, appended each round)
                     const messages: ChatMessage[] = inputMessages.map((m) => ({
                         role: m.role as 'user' | 'assistant',
                         content: m.content,
@@ -75,8 +88,7 @@ export async function POST(request: NextRequest) {
 
                     let llmRequestCount = 0;
                     const MAX_ROUNDS = 3;
-                    
-                    // LLM 交互循环
+
                     for (let round = 0; round < MAX_ROUNDS; round++) {
                         llmRequestCount++;
 
@@ -85,15 +97,20 @@ export async function POST(request: NextRequest) {
                         let doneData: StreamDoneData | null = null;
                         let hasToolCall = false;
 
-                        // LLM 调用
+                        // Call chatCompletionStream with MCP tools
                         for await (const event of chatCompletionStream({
                             model: modelConfig,
                             messages,
                             tools: mcpTools,
                         })) {
-                            // 判断模型返回的响应类型
-                            if (event.type === 'chunk') {
-                                // 流式响应：拼接完成才能判断使用哪个工具
+                            if (event.type === 'request') {
+                                const reqData = event.data as StreamRequestData;
+                                send({
+                                    type: 'llm_request',
+                                    round: llmRequestCount,
+                                    request: reqData.request,
+                                });
+                            } else if (event.type === 'chunk') {
                                 const chunkData = event.data as { chunk: { parsed: unknown } };
                                 const parsed = chunkData.chunk?.parsed as {
                                     choices?: Array<{ delta?: { content?: string } }>;
@@ -116,7 +133,7 @@ export async function POST(request: NextRequest) {
                             }
                         }
 
-                        // 执行当前轮次的LLM响应tool_call
+                        // Process this round
                         if (hasToolCall && toolCallCompleteData) {
                             // 将tool_call消息发送给前端显示
                             send({
@@ -136,7 +153,7 @@ export async function POST(request: NextRequest) {
                                 tool_calls: toolCallCompleteData.tool_calls,
                             });
 
-                            // 获取tool_call的内容，遍历tools，并依次执行
+                            // 获取tool_call的内容，遍历tools，并执行
                             const toolCalls = toolCallCompleteData.tool_calls;
                             for (const tc of toolCalls) {
                                 const toolName = tc.function.name;
@@ -151,11 +168,16 @@ export async function POST(request: NextRequest) {
                                 send({ type: 'tool_call', toolName, args: argsObj });
 
                                 // 执行remote mcp 调用
-                                const callResult = await session.client.callTool({
-                                    name: toolName,
-                                    arguments: argsObj,
-                                });
-                                let result: callResult;
+                                let result: unknown;
+                                try {
+                                    const callResult = await session.client.callTool({
+                                        name: toolName,
+                                        arguments: argsObj,
+                                    });
+                                    result = callResult;
+                                } catch (callError) {
+                                    result = `Error: ${callError instanceof Error ? callError.message : 'Unknown error'}`;
+                                }
 
                                 // 发送tool_call结果给前端
                                 send({ type: 'tool_result', toolName, result });
@@ -207,40 +229,4 @@ export async function POST(request: NextRequest) {
             headers: { 'Content-Type': 'application/json' },
         });
     }
-```
-```
-```
-
-
-## 演示流程
-
-### 1. 添加 MCP Server
-
-1. 在右侧面板点击「添加 Server」
-2. 填写信息：
-   - **名称**：给 Server 起个名字
-   - **URL**：MCP Server 的 StreamableHTTP endpoint
-   - **认证 Header**（可选）：如需认证
-
-3. 点击「连接」
-
-### 2. 开始对话
-
-连接成功后，在输入框中输入消息。LLM 会根据问题自动判断是否需要调用工具。
-
-### 3. 查看执行轨迹
-
-左侧面板显示完整的执行过程：
-- **LLM Request**：发送给模型的请求（含工具定义）
-- **LLM Response**：模型的响应（可能包含工具调用）
-- **Tool Call**：实际执行的工具及参数
-- **Tool Result**：工具返回的结果
-
-## 与 Tool-Call 模块的区别
-
-| | Tool-Call | MCP |
-|---|---|---|
-| 工具来源 | 硬编码（get_time, amap_weather） | 动态发现（MCP Server `list_tools`） |
-| 工具注册 | 编译时确定 | 连接时从远程获取 |
-| 协议 | 无（直接函数调用） | MCP JSON-RPC over HTTP |
-
+}

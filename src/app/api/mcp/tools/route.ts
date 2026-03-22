@@ -17,8 +17,9 @@ export async function POST(request: NextRequest) {
 
     // Handle different tool methods
     if (method === 'listTools' || (!method && !toolName)) {
-      const tools = await session.client.listTools();
-      return NextResponse.json({ tools });
+      const result = await session.client.listTools();
+      // result is { tools: [...], nextCursor?, _meta? }
+      return NextResponse.json({ tools: result.tools });
     }
 
     if (method === 'callTool' || toolName) {

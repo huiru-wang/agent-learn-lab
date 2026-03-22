@@ -41,6 +41,7 @@ export interface ChatCompletionOptions {
   topP?: number;
   stream?: boolean;
   tools?: ToolDefinition[];
+  enableThinking?: boolean;
 }
 
 export interface RequestLog {
@@ -141,7 +142,7 @@ function headersToObject(headers: Headers): Record<string, string> {
 }
 
 function buildRequestBody(options: ChatCompletionOptions, stream: boolean): Record<string, unknown> {
-  const { model, messages, temperature, maxTokens, topP, tools } = options;
+  const { model, messages, temperature, maxTokens, topP, tools, enableThinking } = options;
 
   const body: Record<string, unknown> = {
     model: model.model,
@@ -162,6 +163,11 @@ function buildRequestBody(options: ChatCompletionOptions, stream: boolean): Reco
         parameters: t.parameters,
       },
     }));
+  }
+
+  if (enableThinking) {
+    body.enable_thinking = true;
+    body.stream_options = { include_usage: true };
   }
 
   return body;

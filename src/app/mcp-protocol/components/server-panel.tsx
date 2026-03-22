@@ -5,14 +5,13 @@ import { useMCPStore, type MCPServer } from '../lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,15 +21,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { ChevronDown, Plus, Trash2, Wifi, WifiOff, Loader2 } from 'lucide-react';
+import { Plus, X, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export function ServerPanel() {
   const {
     servers,
     connectionStatus,
     currentServerId,
+    errorMessage,
     addServer,
     removeServer,
     setConnectionStatus,
@@ -40,16 +40,27 @@ export function ServerPanel() {
     setPrompts,
   } = useMCPStore();
 
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const [newServer, setNewServer] = useState({ name: '', serverUrl: '', authHeader: '' });
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectingServerId, setConnectingServerId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-
-  const connectedServer = servers.find((s) => s.id === currentServerId);
+  const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
 
   const handleConnect = async (server: MCPServer) => {
-    setIsConnecting(true);
+    // If already connected to this server, disconnect
+    if (currentServerId === server.id && connectionStatus === 'connected') {
+      await handleDisconnect();
+      return;
+    }
+
+    setConnectingServerId(server.id);
     setConnectionStatus('connecting');
+    // Clear previous error for this server
+    setServerErrors((prev) => {
+      const next = { ...prev };
+      delete next[server.id];
+      return next;
+    });
 
     try {
       const response = await fetch('/api/mcp/connect', {
@@ -104,9 +115,11 @@ export function ServerPanel() {
         setPrompts(promptsData.prompts || []);
       }
     } catch (error) {
-      setConnectionStatus('error', error instanceof Error ? error.message : 'Connection failed');
+      const msg = error instanceof Error ? error.message : 'Connection failed';
+      setConnectionStatus('error', msg);
+      setServerErrors((prev) => ({ ...prev, [server.id]: msg }));
     } finally {
-      setIsConnecting(false);
+      setConnectingServerId(null);
     }
   };
 
@@ -138,103 +151,78 @@ export function ServerPanel() {
     });
 
     setNewServer({ name: '', serverUrl: '', authHeader: '' });
-    setShowAddForm(false);
+    setShowAddDialog(false);
+  };
+
+  const getServerStatus = (server: MCPServer): 'idle' | 'connecting' | 'connected' | 'error' => {
+    if (connectingServerId === server.id) return 'connecting';
+    if (currentServerId === server.id && connectionStatus === 'connected') return 'connected';
+    if (serverErrors[server.id]) return 'error';
+    return 'idle';
   };
 
   return (
-    <div className="space-y-3">
-      {/* Server selector / status */}
-      <div className="flex items-center gap-2">
-        {connectionStatus === 'connected' && connectedServer ? (
-          <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-md">
-            <Wifi className="h-4 w-4 text-green-600" />
-            <span className="text-sm font-medium text-green-700 flex-1">{connectedServer.name}</span>
-            <Button variant="ghost" size="sm" onClick={handleDisconnect} className="text-green-600 hover:text-green-700 hover:bg-green-100">
-              断开
-            </Button>
-          </div>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild className="flex-1">
-              <Button variant="outline" className="justify-between">
-                {connectedServer ? connectedServer.name : '选择 Server'}
-                <ChevronDown className="h-4 w-4 ml-2" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56">
-              {servers.length === 0 ? (
-                <DropdownMenuItem disabled className="text-muted-foreground">
-                  暂无已保存的 Server
-                </DropdownMenuItem>
-              ) : (
-                servers.map((server) => (
-                  <DropdownMenuItem
-                    key={server.id}
-                    onClick={() => handleConnect(server)}
-                    disabled={isConnecting}
-                    className="flex items-center justify-between"
-                  >
-                    <span>{server.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirmId(server.id);
-                      }}
-                      className="ml-2 text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuItem>
-                ))
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setShowAddForm(true)} className="text-primary">
-                <Plus className="h-4 w-4 mr-2" />
-                添加 Server
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+    <div className="space-y-2">
+      {/* Top bar: Add button + server tags */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs gap-1 flex-shrink-0"
+          onClick={() => setShowAddDialog(true)}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          添加 MCP
+        </Button>
 
-        {connectionStatus === 'connecting' && (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        )}
-
-        {connectionStatus === 'error' && (
-          <WifiOff className="h-4 w-4 text-destructive" />
-        )}
+        {servers.map((server) => {
+          const status = getServerStatus(server);
+          return (
+            <div key={server.id} className="group relative flex items-center">
+              <Badge
+                variant="outline"
+                className={cn(
+                  'cursor-pointer select-none pr-5 transition-colors',
+                  status === 'connected' && 'border-green-400 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400 dark:border-green-700',
+                  status === 'error' && 'border-red-400 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400 dark:border-red-700',
+                  status === 'connecting' && 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-700',
+                  status === 'idle' && 'hover:bg-muted',
+                )}
+                onClick={() => handleConnect(server)}
+                title={serverErrors[server.id] || server.serverUrl}
+              >
+                {status === 'connecting' && (
+                  <Loader2 className="h-3 w-3 animate-spin mr-0.5" />
+                )}
+                {server.name}
+              </Badge>
+              {/* Delete X button */}
+              <button
+                className="absolute right-0.5 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteConfirmId(server.id);
+                }}
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Error message */}
-      {connectionStatus === 'error' && (
-        <div className="text-sm text-destructive px-2">
-          {useMCPStore.getState().errorMessage}
-        </div>
+      {/* Error message for current connection attempt */}
+      {connectionStatus === 'error' && errorMessage && (
+        <p className="text-xs text-destructive px-1">{errorMessage}</p>
       )}
 
-      {/* Empty state */}
-      {servers.length === 0 && !showAddForm && (
-        <Card className="border-dashed">
-          <CardContent className="pt-6 pb-4 text-center">
-            <p className="text-sm text-muted-foreground mb-3">暂无已连接的 MCP Server</p>
-            <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              添加 Server
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Add Server form */}
-      {showAddForm && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">添加 MCP Server</CardTitle>
-            <CardDescription>填写 Server 连接信息</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+      {/* Add Server Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>添加 MCP Server</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
             <div className="space-y-1">
               <Label htmlFor="server-name">名称</Label>
               <Input
@@ -262,17 +250,17 @@ export function ServerPanel() {
                 onChange={(e) => setNewServer({ ...newServer, authHeader: e.target.value })}
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button size="sm" onClick={handleAddServer} disabled={!newServer.name || !newServer.serverUrl}>
-                连接
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowAddForm(false)}>
+            <div className="flex gap-2 pt-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowAddDialog(false)}>
                 取消
               </Button>
+              <Button size="sm" onClick={handleAddServer} disabled={!newServer.name || !newServer.serverUrl}>
+                添加
+              </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>

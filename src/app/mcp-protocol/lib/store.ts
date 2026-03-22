@@ -3,6 +3,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+// ── MCP Server / Capabilities ────────────────────────────────────────────────
+
 export interface MCPServer {
   id: string;
   name: string;
@@ -29,16 +31,39 @@ export interface MCPPrompt {
   arguments?: Array<{ name: string; description?: string; required?: boolean }>;
 }
 
-export interface CallLogEntry {
+// ── Execution Trace (aligned with tool-call module) ──────────────────────────
+
+export type TraceStepStatus = 'pending' | 'active' | 'completed' | 'error';
+
+export interface TraceStepDetail {
+  request?: unknown;
+  response?: unknown;
+  stepType?: 'llm_request' | 'llm_response' | 'tool_call' | 'tool_call_result';
+  toolCalls?: Array<{
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+  }>;
+}
+
+export interface TraceStep {
   id: string;
-  type: 'tool_call' | 'tool_result' | 'resource_read' | 'prompt_get';
-  title: string;
-  detail: {
-    request?: unknown;
-    response?: unknown;
-  };
+  label: string;
+  content?: string;
+  status: TraceStepStatus;
+  detail?: TraceStepDetail;
+}
+
+// ── Message ──────────────────────────────────────────────────────────────────
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
   timestamp: number;
 }
+
+// ── Store ────────────────────────────────────────────────────────────────────
 
 interface MCPState {
   // Connection state
@@ -55,10 +80,14 @@ interface MCPState {
   resources: MCPResource[];
   prompts: MCPPrompt[];
 
-  // Call logs
-  callLogs: CallLogEntry[];
+  // Messages
+  messages: Message[];
 
-  // Actions
+  // Execution trace (aligned with tool-call)
+  trace: TraceStep[];
+  isStreaming: boolean;
+
+  // Server actions
   addServer: (server: Omit<MCPServer, 'id'>) => string;
   removeServer: (id: string) => void;
   setConnectionStatus: (status: MCPState['connectionStatus'], errorMessage?: string) => void;
@@ -66,14 +95,24 @@ interface MCPState {
   setTools: (tools: MCPTool[]) => void;
   setResources: (resources: MCPResource[]) => void;
   setPrompts: (prompts: MCPPrompt[]) => void;
-  addCallLog: (entry: Omit<CallLogEntry, 'id' | 'timestamp'>) => void;
-  clearCallLogs: () => void;
+
+  // Message actions
+  addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
+  updateLastAssistantMessage: (content: string) => void;
+
+  // Trace actions (aligned with tool-call)
+  addTraceStep: (step: Omit<TraceStep, 'id'>) => string;
+  updateTraceStep: (id: string, updates: Partial<Omit<TraceStep, 'id'>>) => void;
+  setIsStreaming: (streaming: boolean) => void;
+
+  // Reset
+  clearAll: () => void;
   reset: () => void;
 }
 
 export const useMCPStore = create<MCPState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       // Initial state
       connectionStatus: 'disconnected',
       currentSessionId: null,
@@ -83,8 +122,11 @@ export const useMCPStore = create<MCPState>()(
       tools: [],
       resources: [],
       prompts: [],
-      callLogs: [],
+      messages: [],
+      trace: [],
+      isStreaming: false,
 
+      // Server actions
       addServer: (server) => {
         const id = `server_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         set((state) => ({
@@ -118,15 +160,56 @@ export const useMCPStore = create<MCPState>()(
       setResources: (resources) => set({ resources }),
       setPrompts: (prompts) => set({ prompts }),
 
-      addCallLog: (entry) => {
-        const id = `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      // Message actions
+      addMessage: (message) =>
         set((state) => ({
-          callLogs: [...state.callLogs, { ...entry, id, timestamp: Date.now() }],
+          messages: [
+            ...state.messages,
+            {
+              ...message,
+              id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              timestamp: Date.now(),
+            },
+          ],
+        })),
+
+      updateLastAssistantMessage: (content) =>
+        set((state) => {
+          const messages = [...state.messages];
+          const lastIdx = messages.length - 1;
+          if (lastIdx >= 0 && messages[lastIdx].role === 'assistant') {
+            messages[lastIdx] = { ...messages[lastIdx], content };
+          }
+          return { messages };
+        }),
+
+      // Trace actions (aligned with tool-call)
+      addTraceStep: (step) => {
+        const id = `step-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        set((state) => ({
+          trace: [...state.trace, { ...step, id }],
         }));
+        return id;
       },
 
-      clearCallLogs: () => set({ callLogs: [] }),
+      updateTraceStep: (id, updates) =>
+        set((state) => ({
+          trace: state.trace.map((step) =>
+            step.id === id ? { ...step, ...updates } : step
+          ),
+        })),
 
+      setIsStreaming: (streaming) => set({ isStreaming: streaming }),
+
+      // Clear messages + trace (keep connection)
+      clearAll: () =>
+        set({
+          messages: [],
+          trace: [],
+          isStreaming: false,
+        }),
+
+      // Full reset (disconnect)
       reset: () => {
         set({
           connectionStatus: 'disconnected',
@@ -136,7 +219,9 @@ export const useMCPStore = create<MCPState>()(
           tools: [],
           resources: [],
           prompts: [],
-          callLogs: [],
+          messages: [],
+          trace: [],
+          isStreaming: false,
         });
       },
     }),

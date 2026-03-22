@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (method === 'listResources' || (!method && !uri)) {
-      const resources = await session.client.listResources();
-      return NextResponse.json({ resources });
+      const result = await session.client.listResources();
+      return NextResponse.json({ resources: result.resources });
     }
 
     if (method === 'readResource' || uri) {

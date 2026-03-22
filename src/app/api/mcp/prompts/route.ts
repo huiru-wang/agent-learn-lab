@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (method === 'listPrompts' || (!method && !name)) {
-      const prompts = await session.client.listPrompts();
-      return NextResponse.json({ prompts });
+      const result = await session.client.listPrompts();
+      return NextResponse.json({ prompts: result.prompts });
     }
 
     if (method === 'getPrompt' || name) {
