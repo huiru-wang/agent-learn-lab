@@ -3,6 +3,7 @@ import {
   getModelConfigs,
 } from './config';
 import type { ModelConfig } from './config';
+import { createLLMCallLogger } from './llm-logger';
 
 // ── 兼容性重导出（供 /api/models/route.ts 等使用）──────────────────────────
 export type { ModelConfig };
@@ -189,6 +190,7 @@ export async function chatCompletion(
 ): Promise<ChatCompletionResult> {
   const { model, messages } = options;
   const { apiKey, baseUrl } = resolveApiCredentials(model);
+  const logger = createLLMCallLogger(false);
 
   const url = buildUrl(baseUrl);
   const headers: Record<string, string> = {
@@ -207,6 +209,8 @@ export async function chatCompletion(
     },
     body,
   };
+
+  logger.setRequest(requestLog);
 
   const response = await fetch(url, {
     method: 'POST',
@@ -231,6 +235,8 @@ export async function chatCompletion(
       errorJson = errorBody;
     }
     responseLog.body = errorJson;
+    logger.setResponse(responseLog);
+    logger.flush();
     return { request: requestLog, response: responseLog };
   }
 
@@ -239,6 +245,9 @@ export async function chatCompletion(
 
   const choice = responseBody.choices?.[0];
   const usage = responseBody.usage;
+
+  logger.setResponse(responseLog);
+  logger.flush();
 
   return {
     request: requestLog,
@@ -260,6 +269,7 @@ export async function* chatCompletionStream(
   options: ChatCompletionOptions
 ): AsyncGenerator<StreamEvent> {
   const { apiKey, baseUrl } = resolveApiCredentials(options.model);
+  const logger = createLLMCallLogger(true);
 
   const url = buildUrl(baseUrl);
   const headers: Record<string, string> = {
@@ -279,6 +289,8 @@ export async function* chatCompletionStream(
     body,
   };
 
+  logger.setRequest(requestLog);
+
   yield {
     type: 'request',
     data: { request: requestLog },
@@ -290,8 +302,23 @@ export async function* chatCompletionStream(
     body: JSON.stringify(body),
   });
 
+  const responseHeaders = headersToObject(response.headers);
+
   if (!response.ok) {
     const errorBody = await response.text();
+    let errorJson: unknown;
+    try {
+      errorJson = JSON.parse(errorBody);
+    } catch {
+      errorJson = errorBody;
+    }
+    logger.setResponse({
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders,
+      body: errorJson,
+    });
+    logger.flush();
     yield {
       type: 'error',
       data: { error: `HTTP ${response.status}: ${errorBody}` },
@@ -413,6 +440,7 @@ export async function* chatCompletionStream(
   // 如果 finish_reason 是 tool_calls，发送 tool_call_complete 事件
   if (finishReason === 'tool_calls') {
     const toolCallsArray = Object.values(accumulatedToolCalls);
+    logger.flush();
     yield {
       type: 'tool_call_complete',
       data: {
@@ -423,6 +451,7 @@ export async function* chatCompletionStream(
     return;
   }
 
+  logger.flush();
   yield {
     type: 'done',
     data: {

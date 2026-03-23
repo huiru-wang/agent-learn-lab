@@ -1,32 +1,72 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { GitBranch, Construction } from 'lucide-react';
+'use client';
+
+import { useState } from 'react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { DocsPanel } from '../chatbot/components/docs-panel';
+import { InputPanel } from './components/InputPanel';
+import { ExecutionTrace } from './components/ExecutionTrace';
 
 export default function ReactAgentPage() {
+  const [activeTab, setActiveTab] = useState('demo');
+
   return (
-    <div className="h-screen flex items-center justify-center p-8">
-      <Card className="max-w-md w-full">
-        <CardHeader className="text-center">
-          <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <GitBranch className="h-8 w-8 text-primary" />
+    <div className="h-screen flex flex-col overflow-hidden">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+        <div className="border-b px-4 py-2 bg-muted/30">
+          <TabsList className="h-9">
+            <TabsTrigger value="demo" className="text-base font-medium">演示</TabsTrigger>
+            <TabsTrigger value="docs" className="text-base font-medium">文档</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="demo" className="flex-1 m-0 p-0 overflow-hidden">
+          <div className="flex h-full overflow-hidden">
+            {/* 左侧: 输入区 */}
+            <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '40%', maxWidth: '40%' }}>
+              {/* 工具选择 */}
+              <div className="flex-shrink-0 border-b bg-muted/5 p-4">
+                <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <span>🔧</span> 可用工具
+                </h3>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" defaultChecked className="rounded border-blue-500 text-blue-500" />
+                    <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                    <span className="font-mono">weather_api</span>
+                    <span className="text-muted-foreground text-xs">查询城市天气</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" defaultChecked className="rounded border-green-500 text-green-500" />
+                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                    <span className="font-mono">calculator</span>
+                    <span className="text-muted-foreground text-xs">数学计算</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" defaultChecked className="rounded border-orange-500 text-orange-500" />
+                    <span className="w-3 h-3 rounded-full bg-orange-500"></span>
+                    <span className="font-mono">search</span>
+                    <span className="text-muted-foreground text-xs">网络搜索</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* 输入面板 */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <InputPanel />
+              </div>
+            </div>
+
+            {/* 右侧: 执行轨迹 */}
+            <div className="flex-1 min-w-0" style={{ flexBasis: '60%' }}>
+              <ExecutionTrace />
+            </div>
           </div>
-          <CardTitle>ReAct Agent</CardTitle>
-          <CardDescription>Thought-Action-Observation 循环</CardDescription>
-          <Badge variant="outline" className="mx-auto mt-2">
-            <Construction className="h-3 w-3 mr-1" />
-            开发中
-          </Badge>
-        </CardHeader>
-        <CardContent className="text-center text-sm text-muted-foreground">
-          <p>本章节将演示：</p>
-          <ul className="mt-2 text-left space-y-1">
-            <li>• Reasoning + Acting 融合架构</li>
-            <li>• Thought 推理过程可视化</li>
-            <li>• Action 执行与结果反馈</li>
-            <li>• 迭代循环控制策略</li>
-          </ul>
-        </CardContent>
-      </Card>
+        </TabsContent>
+
+        <TabsContent value="docs" className="flex-1 m-0 p-0 overflow-hidden">
+          <DocsPanel modulePath="/react-agent" />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

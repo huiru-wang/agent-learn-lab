@@ -1,0 +1,152 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { useReactAgentStore } from '../lib/store';
+import { sendExecutionMessage } from '../lib/chat';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Play, Pause, RotateCcw, Loader2 } from 'lucide-react';
+
+interface AvailableModel {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+}
+
+export function InputPanel() {
+  const [input, setInput] = useState('');
+  const [models, setModels] = useState<AvailableModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const { status, taskInput, enabledTools, setTaskInput, reset, clearTrace } = useReactAgentStore();
+
+  const isRunning = status === 'running';
+  const canExecute = input.trim() && enabledTools.length > 0 && !isRunning;
+
+  useEffect(() => {
+    fetch('/api/models')
+      .then((r) => r.json())
+      .then((data) => {
+        const list: AvailableModel[] = data.models || [];
+        setModels(list);
+        if (list.length > 0) setSelectedModel(list[0].id);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setTaskInput(input);
+  }, [input, setTaskInput]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [input]);
+
+  const handleExecute = async () => {
+    if (!canExecute) return;
+    setInput('');
+    await sendExecutionMessage(input.trim(), selectedModel);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleExecute();
+    }
+  };
+
+  const handleReset = () => {
+    reset();
+    setInput('');
+  };
+
+  const handleClear = () => {
+    clearTrace();
+  };
+
+  return (
+    <div className="h-full flex flex-col p-4 gap-4">
+      {/* 任务输入 */}
+      <div className="flex-shrink-0">
+        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+          <span>📝</span> 任务输入
+        </h3>
+        <Textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="输入任务描述... (Enter 执行)"
+          disabled={isRunning}
+          className="min-h-[100px] resize-none text-sm"
+        />
+        {!input.trim() && (
+          <p className="text-xs text-muted-foreground mt-1">请输入任务描述</p>
+        )}
+      </div>
+
+      {/* 模型选择 */}
+      {models.length > 1 && (
+        <div className="flex-shrink-0">
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="text-sm border rounded px-2 py-1.5 bg-background w-full"
+            disabled={isRunning}
+          >
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* 操作按钮 */}
+      <div className="flex gap-2 flex-shrink-0">
+        <Button
+          onClick={handleExecute}
+          disabled={!canExecute}
+          className="flex-1"
+          size="lg"
+        >
+          {isRunning ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              执行中...
+            </>
+          ) : (
+            <>
+              <Play className="h-4 w-4 mr-2" />
+              执行
+            </>
+          )}
+        </Button>
+        <Button
+          onClick={handleReset}
+          disabled={isRunning}
+          variant="outline"
+          size="lg"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* 提示 */}
+      <div className="flex-shrink-0 text-xs text-muted-foreground">
+        <p>示例任务：</p>
+        <ul className="list-disc list-inside mt-1 space-y-0.5">
+          <li>北京明天天气怎么样？</li>
+          <li>帮我计算 123 * 456 + 789</li>
+          <li>搜索一下人工智能的最新发展</li>
+        </ul>
+      </div>
+    </div>
+  );
+}

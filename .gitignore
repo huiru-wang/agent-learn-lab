@@ -46,3 +46,6 @@ next-env.d.ts
 
 # config
 models.config.json
+
+# log
+/log/
