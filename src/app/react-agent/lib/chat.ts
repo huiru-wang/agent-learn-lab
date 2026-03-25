@@ -1,12 +1,11 @@
 import { useReactAgentStore } from './store';
-import type { ToolName } from './tools';
 
 interface SSEEvent {
   type: 'request' | 'thought' | 'thought_delta' | 'action' | 'observation' | 'final_answer' | 'done' | 'error';
   request?: unknown;
   thought?: string;
   delta?: string;
-  toolName?: ToolName;
+  toolName?: string;  // 格式: "serverName:toolName"
   arguments?: Record<string, unknown>;
   observation?: string;
   isError?: boolean;
@@ -86,7 +85,8 @@ export async function sendExecutionMessage(input: string, modelId: string) {
 
       for (const event of events) {
         if (event.type === 'thought' && event.thought) {
-          store.appendThought(event.thought);
+          // thought 事件包含完整内容，直接替换（thought_delta 已累积相同内容）
+          store.setThought(event.thought);
           // 检查 thought 内容是否包含最终答案
           const finalAnswerMatch = event.thought.match(/(?:最终答案|Final Answer)[:：]?\s*(.+)/i);
           if (finalAnswerMatch) {
@@ -98,6 +98,10 @@ export async function sendExecutionMessage(input: string, modelId: string) {
           store.setAction(event.toolName, event.arguments || {});
         } else if (event.type === 'observation' && event.observation !== undefined) {
           store.setObservation(event.observation, event.isError);
+        } else if (event.type === 'final_answer' && event.answer) {
+          // 创建最终步骤（thought + final_answer，无 action）
+          const currentThought = useReactAgentStore.getState().currentThought;
+          store.createFinalStep(currentThought, event.answer);
         } else if (event.type === 'done') {
           store.completeExecution(event.usage);
         } else if (event.type === 'error') {

@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import type { ToolName } from './tools';
 
 // ── 类型定义 ────────────────────────────────────────────────────
 
@@ -9,7 +8,7 @@ export interface Step {
   id: string;
   thought: string;
   action: {
-    toolName: ToolName;
+    toolName: string;  // 格式: "serverName:toolName"
     arguments: Record<string, unknown>;
   } | null;
   observation: string | null;
@@ -29,8 +28,8 @@ export interface ExecutionTrace {
 interface ReactAgentState {
   // 执行状态
   status: ExecutionStatus;
-  // 可用工具列表
-  enabledTools: ToolName[];
+  // 可用工具列表（格式: "serverName:toolName"）
+  enabledTools: string[];
   // 任务输入
   taskInput: string;
   // 执行轨迹
@@ -48,16 +47,18 @@ interface ReactAgentState {
 
   // actions - 状态
   setStatus: (status: ExecutionStatus) => void;
-  setEnabledTools: (tools: ToolName[]) => void;
-  toggleTool: (tool: ToolName) => void;
+  setEnabledTools: (tools: string[]) => void;
+  toggleTool: (tool: string) => void;
   setTaskInput: (input: string) => void;
 
   // actions - 执行
   startExecution: () => void;
   appendThought: (delta: string) => void;
-  setAction: (toolName: ToolName, args: Record<string, unknown>) => void;
+  setThought: (thought: string) => void;
+  setAction: (toolName: string, args: Record<string, unknown>) => void;
   setObservation: (observation: string, isError?: boolean) => void;
   setFinalAnswer: (answer: string) => void;
+  createFinalStep: (thought: string, finalAnswer: string) => void;
   completeExecution: (usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) => void;
   failExecution: (error: string) => void;
   pauseExecution: () => void;
@@ -82,7 +83,7 @@ interface ReactAgentState {
 
 export const useReactAgentStore = create<ReactAgentState>((set, get) => ({
   status: 'idle',
-  enabledTools: ['weather_api', 'calculator', 'search'],
+  enabledTools: [],  // 工具从 MCP 动态加载
   taskInput: '',
   trace: {
     steps: [],
@@ -130,6 +131,11 @@ export const useReactAgentStore = create<ReactAgentState>((set, get) => ({
       currentThought: state.currentThought + delta,
     })),
 
+  setThought: (thought) =>
+    set({
+      currentThought: thought,
+    }),
+
   setAction: (toolName, args) =>
     set({
       currentAction: { toolName, arguments: args },
@@ -162,6 +168,27 @@ export const useReactAgentStore = create<ReactAgentState>((set, get) => ({
         finalAnswer: answer,
       },
     })),
+
+  createFinalStep: (thought, finalAnswer) =>
+    set((state) => {
+      const newStep: Step = {
+        id: `step-${state.trace.steps.length + 1}-${Date.now()}`,
+        thought,
+        action: null,
+        observation: finalAnswer,
+        isError: false,
+      };
+      return {
+        trace: {
+          ...state.trace,
+          steps: [...state.trace.steps, newStep],
+          finalAnswer,
+        },
+        currentThought: '',
+        currentAction: null,
+        currentObservation: null,
+      };
+    }),
 
   completeExecution: (usage) =>
     set((state) => ({

@@ -3,7 +3,7 @@
 import { useReactAgentStore } from '../lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { TOOL_COLORS } from '../lib/tools';
 import { cn } from '@/lib/utils';
 
@@ -53,11 +53,14 @@ function StepCard({ step, index, isActive, isHighlighted }: { step: { id: string
           </div>
         )}
 
-        {/* Observation */}
+        {/* Observation / Final Answer */}
         {step.observation && (
           <div>
-            <div className="text-xs font-medium text-green-600 mb-1">
-              {step.isError ? '⚠️ Observation (Error)' : '📤 Observation'}
+            <div className={cn(
+              'text-xs font-medium mb-1',
+              step.isError ? 'text-destructive' : 'text-green-600 dark:text-green-400'
+            )}>
+              {step.isError ? '⚠️ Observation (Error)' : step.action === null ? '✅ Final Answer' : '📤 Observation'}
             </div>
             <div className={cn(
               'text-sm rounded-lg p-2',
@@ -69,24 +72,6 @@ function StepCard({ step, index, isActive, isHighlighted }: { step: { id: string
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function FinalAnswerCard({ answer }: { answer: string | null }) {
-  if (!answer) return null;
-
-  return (
-    <Card className="border-green-500 bg-green-50/50 dark:bg-green-950/20">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm flex items-center gap-2 text-green-600">
-          <CheckCircle2 className="h-4 w-4" />
-          Final Answer
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-sm whitespace-pre-wrap">{answer}</div>
       </CardContent>
     </Card>
   );
@@ -213,9 +198,6 @@ export function ExecutionTrace() {
               </CardContent>
             </Card>
           )}
-
-          {/* 最终答案 */}
-          {trace.finalAnswer && <FinalAnswerCard answer={trace.finalAnswer} />}
 
           {/* Token 使用统计 */}
           {trace.totalTokens > 0 && (

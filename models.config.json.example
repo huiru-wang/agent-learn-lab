@@ -1,15 +1,15 @@
 {
   "models": [
     {
-      "id": "deepseek-reasoner",
-      "name": "DeepSeek Reasoner",
+      "id": "deepseek/deepseek-reasoner",
+      "name": "deepseek-reasoner",
       "provider": "deepseek",
       "baseUrl": "https://api.deepseek.com",
       "apiKey": "",
       "model": "deepseek-reasoner"
     },
     {
-      "id": "qwen-turbo",
+      "id": "bailian/qwen-turbo",
       "name": "通义千问 Turbo",
       "provider": "qwen",
       "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -17,9 +17,9 @@
       "model": "qwen-turbo"
     },
     {
-      "id": "custom-model",
+      "id": "custom-provider/model-name",
       "name": "自定义模型",
-      "provider": "custom",
+      "provider": "custom-provider",
       "baseUrl": "",
       "apiKey": "",
       "model": ""
@@ -27,7 +27,7 @@
   ],
   "mcp": {
     "amap-maps-streamableHTTP": {
-      "url": "https://mcp.amap.com/mcp?key=6faa91066162948931ad01bd85defd75"
+      "url": "https://mcp.amap.com/mcp?key=key"
     }
   }
 }

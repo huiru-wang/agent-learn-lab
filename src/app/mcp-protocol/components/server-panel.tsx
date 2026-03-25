@@ -63,12 +63,26 @@ export function ServerPanel() {
     });
 
     try {
+      // 对于内置 MCP，需要先获取连接信息
+      let connectUrl = server.serverUrl;
+      let connectAuth = server.authHeader;
+
+      if (server.isBuiltin) {
+        const configRes = await fetch(`/api/config/mcp-servers/${encodeURIComponent(server.name)}`);
+        if (!configRes.ok) {
+          throw new Error('Failed to get server config');
+        }
+        const configData = await configRes.json();
+        connectUrl = configData.serverUrl;
+        connectAuth = configData.authHeader;
+      }
+
       const response = await fetch('/api/mcp/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          serverUrl: server.serverUrl,
-          authHeader: server.authHeader,
+          serverUrl: connectUrl,
+          authHeader: connectAuth,
         }),
       });
 
@@ -196,16 +210,18 @@ export function ServerPanel() {
                 )}
                 {server.name}
               </Badge>
-              {/* Delete X button */}
-              <button
-                className="absolute right-0.5 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteConfirmId(server.id);
-                }}
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
+              {/* Delete X button - 内置 MCP 不显示 */}
+              {!server.isBuiltin && (
+                <button
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConfirmId(server.id);
+                  }}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              )}
             </div>
           );
         })}

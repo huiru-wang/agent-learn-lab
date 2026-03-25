@@ -8,8 +8,9 @@ import { persist } from 'zustand/middleware';
 export interface MCPServer {
   id: string;
   name: string;
-  serverUrl: string;
+  serverUrl?: string;    // 内置 MCP 可能为空，连接时从服务端获取
   authHeader?: string;
+  isBuiltin?: boolean;  // 内置标记
 }
 
 export interface MCPTool {
@@ -231,6 +232,39 @@ export const useMCPStore = create<MCPState>()(
         // Only persist servers, not connection state
         servers: state.servers,
       }),
+      onRehydrateStorage: () => (state) => {
+        // Fetch builtins and merge with persisted servers
+        if (typeof window !== 'undefined' && state) {
+          fetch('/api/config/mcp-servers')
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.builtins && Array.isArray(data.builtins)) {
+                // 内置 MCP：id 以 builtin_ 开头，serverUrl 留空（连接时获取）
+                const builtinServers = data.builtins.map(
+                  (s: { name: string }) => ({
+                    name: s.name,
+                    id: `builtin_${s.name}`,
+                    isBuiltin: true,
+                  })
+                );
+
+                // 用户 MCP：id 不以 builtin_ 开头
+                const userServers = state.servers.filter(
+                  (s) => !s.id.startsWith('builtin_')
+                );
+
+                // 按名称去重：内置优先
+                const builtinNames = builtinServers.map((s: { name: string }) => s.name);
+                const filteredUserServers = userServers.filter(
+                  (s) => !builtinNames.includes(s.name)
+                );
+
+                state.servers = [...builtinServers, ...filteredUserServers];
+              }
+            })
+            .catch(console.error);
+        }
+      },
     }
   )
 );

@@ -11,13 +11,31 @@ export interface ModelConfig {
 }
 
 export interface McpServerConfig {
-  url: string;
+  name: string;
+  serverUrl: string;
   authHeader?: string;
 }
 
+// 内置 MCP Servers（敏感信息存储在此，不暴露给前端）
+export interface BuiltinMcpServer {
+  name: string;
+  serverUrl: string;
+  authHeader?: string;
+}
+
+// 内置 MCP Servers 配置（key 在此管理）
+const BUILTIN_MCP_SERVERS: BuiltinMcpServer[] = [
+  {
+    name: '高德地图',
+    serverUrl: 'https://mcp.amap.com/mcp?key=6faa91066162948931ad01bd85defd75',
+  },
+];
+
+export { BUILTIN_MCP_SERVERS };
+
 interface ModelsConfigFile {
   models: ModelConfig[];
-  mcp?: Record<string, McpServerConfig>;
+  mcpServers?: McpServerConfig[];
 }
 
 let cachedConfig: ModelsConfigFile | null = null;
@@ -43,9 +61,9 @@ export async function getModelConfigs(): Promise<ModelConfig[]> {
   return config.models;
 }
 
-export async function getMcpConfigs(): Promise<Record<string, McpServerConfig>> {
+export async function getMcpConfigs(): Promise<McpServerConfig[]> {
   const config = await loadConfig();
-  return config.mcp || {};
+  return config.mcpServers || [];
 }
 
 export async function getModelConfigById(id: string): Promise<ModelConfig | undefined> {

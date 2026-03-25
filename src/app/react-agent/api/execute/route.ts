@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletionStream, type ChatMessage } from '@/lib/llm-client';
-import { getModelConfigById } from '@/lib/config';
-import { executeTool, TOOLS, type ToolName } from '../../lib/tools';
+import { getModelConfigById, BUILTIN_MCP_SERVERS, getMcpConfigs } from '@/lib/config';
+import {
+  connectToMCPServer,
+  callMCPTool,
+  disconnectAllMCPServers,
+  type MCPTool,
+} from '@/lib/react-mcp';
 
 const MAX_ITERATIONS = 10;
 
+interface ToolInfo {
+  name: string;  // 完整名称 "serverName:toolName"
+  serverName: string;
+  toolName: string;
+  description?: string;
+  inputSchema: unknown;
+}
+
 interface ToolCallResult {
   toolCallId: string;
-  toolName: ToolName;
+  toolName: string;
   arguments: Record<string, unknown>;
 }
 
@@ -33,12 +46,122 @@ interface ToolCallCompleteData {
   }>;
 }
 
+/**
+ * 获取启用的工具列表
+ */
+async function getEnabledTools(enabledToolIds: string[]): Promise<{
+  tools: ToolInfo[];
+  toolDefinitions: Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  }>;
+}> {
+  const result: ToolInfo[] = [];
+  const toolDefs: Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  }> = [];
+
+  // 获取所有可用的 MCP 服务器
+  const allServers = [
+    ...BUILTIN_MCP_SERVERS.map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
+    ...(await getMcpConfigs()).map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
+  ];
+
+  // 连接每个启用的 MCP 服务器
+  const serverToolsMap = new Map<string, { tools: MCPTool[]; serverUrl: string }>();
+
+  for (const toolId of enabledToolIds) {
+    // toolId 格式: "serverName:toolName"
+    const [serverName, toolName] = toolId.split(':');
+    if (!serverName || !toolName) continue;
+
+    // 查找服务器
+    const server = allServers.find((s) => s.name === serverName);
+    if (!server) continue;
+
+    // 如果还没连接过这个服务器，先连接
+    if (!serverToolsMap.has(serverName)) {
+      try {
+        const { tools } = await connectToMCPServer(server);
+        serverToolsMap.set(serverName, { tools, serverUrl: server.serverUrl });
+      } catch (error) {
+        console.error(`Failed to connect to MCP server ${serverName}:`, error);
+        continue;
+      }
+    }
+
+    // 查找工具定义
+    const serverInfo = serverToolsMap.get(serverName)!;
+    const tool = serverInfo.tools.find((t) => t.name === toolName);
+    if (!tool) continue;
+
+    // 添加到结果
+    result.push({
+      name: toolId,
+      serverName,
+      toolName,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+    });
+
+    // 添加到 LLM 工具定义
+    toolDefs.push({
+      name: toolId,  // 使用完整名称
+      description: tool.description || `调用 ${serverName} 的 ${toolName} 工具`,
+      parameters: tool.inputSchema as Record<string, unknown>,
+    });
+  }
+
+  return { tools: result, toolDefinitions: toolDefs };
+}
+
+/**
+ * 执行 MCP 工具调用
+ */
+async function executeMcpTool(
+  toolName: string,
+  args: Record<string, unknown>
+): Promise<string> {
+  // toolName 格式: "serverName:actualToolName"
+  const [serverName, actualToolName] = toolName.split(':');
+  if (!serverName || !actualToolName) {
+    return JSON.stringify({ error: `无效的工具名称: ${toolName}` });
+  }
+
+  // 获取服务器信息
+  const allServers = [
+    ...BUILTIN_MCP_SERVERS.map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
+    ...(await getMcpConfigs()).map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
+  ];
+
+  const server = allServers.find((s) => s.name === serverName);
+  if (!server) {
+    return JSON.stringify({ error: `服务器未找到: ${serverName}` });
+  }
+
+  // 连接并调用工具
+  try {
+    const { sessionId } = await connectToMCPServer(server);
+    const result = await callMCPTool(sessionId, actualToolName, args);
+    if (result.success) {
+      return JSON.stringify(result.result);
+    } else {
+      return JSON.stringify({ error: result.error });
+    }
+  } catch (error) {
+    return JSON.stringify({ error: error instanceof Error ? error.message : '工具调用失败' });
+  }
+}
+
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
 
   try {
     const body = await request.json();
-    const { task, model: modelId, tools: enabledTools } = body;
+    const { task, model: modelId, tools: enabledToolIds } = body;
 
     if (!task || typeof task !== 'string') {
       return new Response(JSON.stringify({ error: '缺少任务描述' }), { status: 400 });
@@ -48,14 +171,25 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: '缺少模型 ID' }), { status: 400 });
     }
 
+    if (!enabledToolIds || !Array.isArray(enabledToolIds) || enabledToolIds.length === 0) {
+      return new Response(JSON.stringify({ error: '请至少选择一个工具' }), { status: 400 });
+    }
+
     const modelConfig = await getModelConfigById(modelId);
     if (!modelConfig) {
       return new Response(JSON.stringify({ error: `模型未找到: ${modelId}` }), { status: 400 });
     }
 
-    // 构建 System Prompt
+    // 获取启用的工具
+    const { tools: enabledTools, toolDefinitions } = await getEnabledTools(enabledToolIds);
+
+    if (enabledTools.length === 0) {
+      return new Response(JSON.stringify({ error: '没有可用的工具' }), { status: 400 });
+    }
+
+    // 构建工具描述
     const toolsDescription = enabledTools
-      .map((t: ToolName) => `- ${t}: ${TOOLS.find((tool) => tool.name === t)?.description}`)
+      .map((t) => `- ${t.name}: ${t.description || '调用 ' + t.serverName + ' 的 ' + t.toolName}`)
       .join('\n');
 
     const systemPrompt = `你是一个 ReAct (Reasoning + Acting) Agent。
@@ -71,7 +205,7 @@ ${toolsDescription}
 
 ## 重要规则
 - 每次回复先用"思考:"开头说明推理过程
-- 如果需要工具，明确说要使用什么工具
+- 如果需要工具，使用工具调用（工具名称为完整名称，如 "${enabledTools[0]?.name}"）
 - 如果已有足够信息，给出"最终答案: xxx"
 
 现在开始执行任务。`;
@@ -105,14 +239,7 @@ ${toolsDescription}
             model: modelConfig,
             messages,
             stream: true,
-            tools: enabledTools.map((name: ToolName) => {
-              const tool = TOOLS.find((t) => t.name === name)!;
-              return {
-                name: tool.name,
-                description: tool.description,
-                parameters: tool.parameters,
-              };
-            }),
+            tools: toolDefinitions,
           })) {
             if (event.type === 'chunk') {
               // 累积 content 用于 UI 展示
@@ -142,7 +269,7 @@ ${toolsDescription}
                 }
                 return {
                   toolCallId: tc.id || `call_${Date.now()}`,
-                  toolName: tc.function?.name as ToolName,
+                  toolName: tc.function?.name || '',
                   arguments: args,
                 };
               }) || [];
@@ -155,6 +282,8 @@ ${toolsDescription}
               const errData = event.data as { error: string };
               send({ type: 'error', error: errData.error });
               controller.close();
+              // 清理 MCP 连接
+              await disconnectAllMCPServers();
               return;
             }
           }
@@ -170,11 +299,17 @@ ${toolsDescription}
             hasToolCalls = true;
             // 遍历所有工具调用
             for (const toolCallResult of toolCallResults) {
-              if (!enabledTools.includes(toolCallResult.toolName)) continue;
+              // 检查工具是否在启用列表中
+              const isEnabled = enabledTools.some((t) => t.name === toolCallResult.toolName);
+              if (!isEnabled) {
+                send({ type: 'observation', observation: JSON.stringify({ error: `工具未启用: ${toolCallResult.toolName}` }) });
+                continue;
+              }
 
               send({ type: 'action', toolName: toolCallResult.toolName, arguments: toolCallResult.arguments });
 
-              const observation = executeTool(toolCallResult.toolName, toolCallResult.arguments);
+              // 调用 MCP 工具
+              const observation = await executeMcpTool(toolCallResult.toolName, toolCallResult.arguments);
               send({ type: 'observation', observation });
 
               // 更新消息历史 - 包含 tool_calls
@@ -205,6 +340,8 @@ ${toolsDescription}
             send({ type: 'final_answer', answer: finalAnswerMatch[1].trim() });
             send({ type: 'done', usage: totalUsage });
             controller.close();
+            // 清理 MCP 连接
+            await disconnectAllMCPServers();
             return;
           } else if (accumulatedContent.trim()) {
             // 有思考但没有工具调用和最终答案，继续推理
@@ -219,6 +356,8 @@ ${toolsDescription}
         send({ type: 'error', error: `执行已达最大迭代次数 (${MAX_ITERATIONS})` });
         send({ type: 'done', usage: totalUsage });
         controller.close();
+        // 清理 MCP 连接
+        await disconnectAllMCPServers();
       },
     });
 
