@@ -1,16 +1,4 @@
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  parameters: {
-    type: 'object';
-    properties: Record<string, {
-      type: string;
-      description: string;
-      enum?: string[];
-    }>;
-    required?: string[];
-  };
-}
+import type { ToolDefinition } from '@/lib/tool-types';
 
 // get_time 工具的 JSON Schema 定义
 export const getTimeDefinition: ToolDefinition = {
@@ -42,11 +30,11 @@ export const getTimeToolForSDK = {
       properties: {
         timezone: {
           type: 'string',
-          description: getTimeDefinition.parameters.properties.timezone.description,
+          description: (getTimeDefinition.parameters as { properties: { timezone: { description: string } } }).properties.timezone.description,
         },
         format: {
           type: 'string',
-          description: getTimeDefinition.parameters.properties.format.description,
+          description: (getTimeDefinition.parameters as { properties: { format: { description: string } } }).properties.format.description,
           enum: ['full', 'date', 'time'],
         },
       },

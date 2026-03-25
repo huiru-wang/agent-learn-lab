@@ -188,3 +188,38 @@
 | Resources | MCP Server 提供的 URI 可寻址只读数据 |
 | Tools | MCP Server 提供的可调用函数 |
 | Prompts | MCP Server 提供的预定义提示词模板（含变量占位符） |
+
+## 共享基础设施
+
+MCP 相关类型和连接管理作为共享基础设施供所有 Agent 模块使用：
+
+| 文件 | 说明 |
+|---|---|
+| `src/lib/tool-types.ts` | 共享工具类型定义 (`ToolDefinition`, `MCPTool`, `mcpToolNameToLocal`) |
+| `src/lib/mcp-client.ts` | MCP 客户端工厂 (`createMCPClient`, `getMCPSession`, `closeMCPSession`) |
+| `src/lib/config.ts` | MCP 配置读取 (`getMcpConfigs`) |
+| `src/app/mcp-protocol/lib/mcp-session.ts` | MCP Protocol 模块自有的会话管理（独立于共享工厂） |
+
+### MCP 工具命名规范 (SEP-986)
+
+MCP 工具名称必须符合正则 `^[A-Za-z0-9._-]{1,128}$`，**不允许冒号 `:`**。
+
+当多个 MCP Server 提供同名工具时，使用下划线前缀避免冲突：
+
+```
+amap_maps_streamableHTTP_search_nearby  // 格式: {serverName}_{toolName}
+```
+
+转换函数：
+
+```typescript
+import { mcpToolNameToLocal, localToolNameToMCP } from '@/lib/tool-types';
+
+// MCP 工具名 → 本地工具名
+mcpToolNameToLocal('search_nearby', 'amap-maps-streamableHTTP')
+// → 'amap_maps_streamableHTTP_search_nearby'
+
+// 本地工具名 → MCP 工具名
+localToolNameToMCP('amap_maps_streamableHTTP_search_nearby')
+// → { serverName: 'amap-maps-streamableHTTP', toolName: 'search_nearby' }
+```

@@ -1,17 +1,25 @@
 // ── 工具定义 ────────────────────────────────────────────────────
 
+import type { ToolDefinition } from '@/lib/tool-types';
+
+// 本地工具名称类型
 export type ToolName = 'weather_api' | 'calculator' | 'search';
 
+// 本地工具（包含 UI 相关属性）
 export interface Tool {
   name: ToolName;
   description: string;
   color: string; // 边框颜色
 }
 
+// 工具调用请求
 export interface ToolCall {
   name: ToolName;
   arguments: Record<string, unknown>;
 }
+
+// 导出共享的 ToolDefinition 类型（用于 LLM 工具调用）
+export type { ToolDefinition };
 
 // 工具颜色配置
 export const TOOL_COLORS: Record<ToolName, string> = {
@@ -127,6 +135,15 @@ function simulateSearch(args: Record<string, unknown>): string {
     results: results.slice(0, 2),
     total: results.length,
   });
+}
+
+// 将本地工具转换为 ToolDefinition 格式（用于 LLM 工具调用）
+export function toToolDefinitions(): ToolDefinition[] {
+  return TOOLS.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters as unknown as Record<string, unknown>,
+  }));
 }
 
 // 工具执行入口

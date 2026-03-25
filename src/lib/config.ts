@@ -10,8 +10,14 @@ export interface ModelConfig {
   model: string;
 }
 
+export interface McpServerConfig {
+  url: string;
+  authHeader?: string;
+}
+
 interface ModelsConfigFile {
   models: ModelConfig[];
+  mcp?: Record<string, McpServerConfig>;
 }
 
 let cachedConfig: ModelsConfigFile | null = null;
@@ -35,6 +41,11 @@ async function loadConfig(): Promise<ModelsConfigFile> {
 export async function getModelConfigs(): Promise<ModelConfig[]> {
   const config = await loadConfig();
   return config.models;
+}
+
+export async function getMcpConfigs(): Promise<Record<string, McpServerConfig>> {
+  const config = await loadConfig();
+  return config.mcp || {};
 }
 
 export async function getModelConfigById(id: string): Promise<ModelConfig | undefined> {
