@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { BUILTIN_MCP_SERVERS } from './config';
+import { getBuiltinMcpConfigs } from './config';
 
 export interface MCPServerInfo {
   name: string;
@@ -28,12 +28,13 @@ const sessions = new Map<string, { client: Client; serverUrl: string }>();
  * @param name 服务器名称
  * @param userServers 用户配置的服务器（可选）
  */
-export function getMCPServerInfo(
+export async function getMCPServerInfo(
   name: string,
   userServers?: MCPServerInfo[]
-): MCPServerInfo | undefined {
+): Promise<MCPServerInfo | undefined> {
   // 先查找内置服务器
-  const builtin = BUILTIN_MCP_SERVERS.find((s) => s.name === name);
+  const builtins = await getBuiltinMcpConfigs();
+  const builtin = builtins.find((s) => s.name === name);
   if (builtin) {
     return {
       name: builtin.name,

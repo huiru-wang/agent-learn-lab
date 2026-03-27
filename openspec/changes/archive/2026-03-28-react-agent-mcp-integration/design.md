@@ -36,8 +36,9 @@ interface McpConfig {
   };
 }
 
-// 返回 { "amap-maps-streamableHTTP": { url: "https://mcp.amap.com/mcp?key=..." } }
+// 返回 { "amap-maps-streamableHTTP": { url: "https://mcp.amap.com/mcp?key=key" } }
 export async function getMcpConfigs(): Promise<McpConfig>
+
 ```
 
 **理由：** 与现有模型配置读取模式一致，无需额外配置文件。

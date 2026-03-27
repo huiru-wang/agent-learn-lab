@@ -32,7 +32,7 @@ export default function MCPProtocolContent() {
               </div>
               {/* MCP Tools 列表：填满剩余空间，内部滚动 */}
               <div className="flex-1 min-h-0 px-4 pb-3">
-                <McpList />
+                <McpList selectionMode={false} />
               </div>
             </div>
 

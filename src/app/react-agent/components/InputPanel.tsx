@@ -26,7 +26,7 @@ export function InputPanel() {
     const { status, taskInput, enabledTools, setTaskInput, reset, clearTrace } = useReactAgentStore();
 
     const isRunning = status === 'running';
-    const canExecute = input.trim() && enabledTools.length > 0 && !isRunning;
+    const canExecute = input.trim() && !isRunning;
 
     useEffect(() => {
         fetch('/api/models')

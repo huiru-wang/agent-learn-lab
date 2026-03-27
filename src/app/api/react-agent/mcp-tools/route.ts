@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { BUILTIN_MCP_SERVERS, getMcpConfigs } from '@/lib/config';
+import { getBuiltinMcpConfigs, getMcpConfigs } from '@/lib/config';
 import { connectToMCPServer } from '@/lib/react-mcp';
 
 export async function GET() {
@@ -15,7 +15,8 @@ export async function GET() {
     };
 
     // 获取内置 MCP 服务器
-    for (const server of BUILTIN_MCP_SERVERS) {
+    const builtinServers = await getBuiltinMcpConfigs();
+    for (const server of builtinServers) {
       result.builtins.push({
         name: server.name,
         serverUrl: server.serverUrl,
@@ -33,7 +34,7 @@ export async function GET() {
 
     // 尝试连接所有服务器并获取工具列表
     const allServers = [
-      ...BUILTIN_MCP_SERVERS.map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
+      ...builtinServers.map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
       ...userServers.map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
     ];
 

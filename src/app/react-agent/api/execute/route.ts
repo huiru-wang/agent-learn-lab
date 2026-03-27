@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { chatCompletionStream, type ChatMessage } from '@/lib/llm-client';
-import { getModelConfigById, BUILTIN_MCP_SERVERS, getMcpConfigs } from '@/lib/config';
+import { getModelConfigById, getBuiltinMcpConfigs, getMcpConfigs } from '@/lib/config';
 import {
   connectToMCPServer,
   callMCPTool,
@@ -9,6 +9,43 @@ import {
 } from '@/lib/react-mcp';
 
 const MAX_ITERATIONS = 10;
+
+/**
+ * 从 toolId 中提取服务器名称
+ * toolId 格式: "serverId:toolName" 或 "serverName:toolName"
+ * serverId 可能是 "builtin_xxx" 或 "user_xxx_timestamp" 或直接是 "xxx"
+ */
+function extractServerName(toolId: string): { serverName: string; toolName: string } | null {
+  const parts = toolId.split(':');
+  if (parts.length !== 2) return null;
+
+  const serverId = parts[0];
+  const toolName = parts[1];
+  let serverName: string;
+
+  // 从 serverId 提取服务器名称
+  // builtin_xxx -> xxx
+  if (serverId.startsWith('builtin_')) {
+    serverName = serverId.slice('builtin_'.length);
+  }
+  // user_xxx_timestamp -> xxx
+  else if (serverId.startsWith('user_')) {
+    // user_xxx_timestamp 格式，去掉 user_ 前缀和最后的时间戳
+    const withoutPrefix = serverId.slice('user_'.length);
+    const lastUnderscore = withoutPrefix.lastIndexOf('_');
+    if (lastUnderscore > 0) {
+      serverName = withoutPrefix.slice(0, lastUnderscore);
+    } else {
+      serverName = withoutPrefix;
+    }
+  }
+  // 直接是服务器名称
+  else {
+    serverName = serverId;
+  }
+
+  return { serverName, toolName };
+}
 
 interface ToolInfo {
   name: string;  // 完整名称 "serverName:toolName"
@@ -66,7 +103,7 @@ async function getEnabledTools(enabledToolIds: string[]): Promise<{
 
   // 获取所有可用的 MCP 服务器
   const allServers = [
-    ...BUILTIN_MCP_SERVERS.map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
+    ...(await getBuiltinMcpConfigs()).map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
     ...(await getMcpConfigs()).map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
   ];
 
@@ -74,9 +111,10 @@ async function getEnabledTools(enabledToolIds: string[]): Promise<{
   const serverToolsMap = new Map<string, { tools: MCPTool[]; serverUrl: string }>();
 
   for (const toolId of enabledToolIds) {
-    // toolId 格式: "serverName:toolName"
-    const [serverName, toolName] = toolId.split(':');
-    if (!serverName || !toolName) continue;
+    // toolId 格式: "serverId:toolName" 或 "serverName:toolName"
+    const parsed = extractServerName(toolId);
+    if (!parsed) continue;
+    const { serverName, toolName } = parsed;
 
     // 查找服务器
     const server = allServers.find((s) => s.name === serverName);
@@ -125,15 +163,16 @@ async function executeMcpTool(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<string> {
-  // toolName 格式: "serverName:actualToolName"
-  const [serverName, actualToolName] = toolName.split(':');
-  if (!serverName || !actualToolName) {
+  // toolName 格式: "serverId:actualToolName" 或 "serverName:actualToolName"
+  const parsed = extractServerName(toolName);
+  if (!parsed) {
     return JSON.stringify({ error: `无效的工具名称: ${toolName}` });
   }
+  const { serverName, toolName: actualToolName } = parsed;
 
   // 获取服务器信息
   const allServers = [
-    ...BUILTIN_MCP_SERVERS.map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
+    ...(await getBuiltinMcpConfigs()).map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
     ...(await getMcpConfigs()).map((s) => ({ name: s.name, serverUrl: s.serverUrl, authHeader: s.authHeader })),
   ];
 
@@ -171,28 +210,29 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: '缺少模型 ID' }), { status: 400 });
     }
 
-    if (!enabledToolIds || !Array.isArray(enabledToolIds) || enabledToolIds.length === 0) {
-      return new Response(JSON.stringify({ error: '请至少选择一个工具' }), { status: 400 });
-    }
-
     const modelConfig = await getModelConfigById(modelId);
     if (!modelConfig) {
       return new Response(JSON.stringify({ error: `模型未找到: ${modelId}` }), { status: 400 });
     }
 
-    // 获取启用的工具
-    const { tools: enabledTools, toolDefinitions } = await getEnabledTools(enabledToolIds);
+    // 获取启用的工具（可选）
+    let enabledTools: Awaited<ReturnType<typeof getEnabledTools>>['tools'] = [];
+    let toolDefinitions: Awaited<ReturnType<typeof getEnabledTools>>['toolDefinitions'] = [];
 
-    if (enabledTools.length === 0) {
-      return new Response(JSON.stringify({ error: '没有可用的工具' }), { status: 400 });
+    if (enabledToolIds && Array.isArray(enabledToolIds) && enabledToolIds.length > 0) {
+      const result = await getEnabledTools(enabledToolIds);
+      enabledTools = result.tools;
+      toolDefinitions = result.toolDefinitions;
     }
 
-    // 构建工具描述
+    // 构建工具描述（如果没有工具，则为纯推理模式）
+    const hasTools = enabledTools.length > 0;
     const toolsDescription = enabledTools
       .map((t) => `- ${t.name}: ${t.description || '调用 ' + t.serverName + ' 的 ' + t.toolName}`)
       .join('\n');
 
-    const systemPrompt = `你是一个 ReAct (Reasoning + Acting) Agent。
+    const systemPrompt = hasTools
+      ? `你是一个 ReAct (Reasoning + Acting) Agent。
 
 ## 你的工作方式
 1. 先进行推理思考（Thought），用中文说明
@@ -206,6 +246,17 @@ ${toolsDescription}
 ## 重要规则
 - 每次回复先用"思考:"开头说明推理过程
 - 如果需要工具，使用工具调用（工具名称为完整名称，如 "${enabledTools[0]?.name}"）
+- 如果已有足够信息，给出"最终答案: xxx"
+
+现在开始执行任务。`
+      : `你是一个推理助手。
+
+## 你的工作方式
+1. 进行推理思考（Thought），用中文说明你的分析过程
+2. 根据推理给出最终答案
+
+## 重要规则
+- 每次回复先用"思考:"开头说明推理过程
 - 如果已有足够信息，给出"最终答案: xxx"
 
 现在开始执行任务。`;
