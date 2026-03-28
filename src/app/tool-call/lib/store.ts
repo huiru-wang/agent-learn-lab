@@ -5,6 +5,17 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  tokenCount?: number;
+  requestLogId?: string;
+  responseLogIds?: string[];
+}
+
+export interface RequestLog {
+  id: string;
+  timestamp: number;
+  type: 'request' | 'response';
+  data: unknown;
+  duration?: number;
 }
 
 export type TraceStepStatus = 'pending' | 'active' | 'completed' | 'error';
@@ -35,6 +46,7 @@ export interface ToolCallInfo {
 
 interface ToolCallState {
   messages: Message[];
+  requestLog: RequestLog[];
   trace: TraceStep[];
   isStreaming: boolean;
   currentToolCall: ToolCallInfo | null;
@@ -43,6 +55,7 @@ interface ToolCallState {
   // actions
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateLastAssistantMessage: (content: string) => void;
+  addRequestLog: (log: Omit<RequestLog, 'id'>) => string;
   addTraceStep: (step: Omit<TraceStep, 'id'>) => string;
   updateTraceStep: (id: string, updates: Partial<Omit<TraceStep, 'id'>>) => void;
   setIsStreaming: (streaming: boolean) => void;
@@ -53,6 +66,7 @@ interface ToolCallState {
 
 export const useToolCallStore = create<ToolCallState>((set) => ({
   messages: [],
+  requestLog: [],
   trace: [],
   isStreaming: false,
   currentToolCall: null,
@@ -80,6 +94,14 @@ export const useToolCallStore = create<ToolCallState>((set) => ({
       return { messages };
     }),
 
+  addRequestLog: (log) => {
+    const id = `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    set((state) => ({
+      requestLog: [...state.requestLog, { ...log, id }],
+    }));
+    return id;
+  },
+
   addTraceStep: (step) => {
     const id = `step-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     set((state) => ({
@@ -104,6 +126,7 @@ export const useToolCallStore = create<ToolCallState>((set) => ({
   clearAll: () =>
     set({
       messages: [],
+      requestLog: [],
       trace: [],
       isStreaming: false,
       currentToolCall: null,

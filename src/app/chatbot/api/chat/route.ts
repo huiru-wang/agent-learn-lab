@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getModelConfigById } from '@/lib/config';
+import { getModelConfigById, validateModelForAgent } from '@/lib/config';
 import {
   chatCompletion,
   chatCompletionStream,
   type ChatMessage,
 } from '@/lib/llm-client';
+import { createTimestamp } from '@/lib/chat-utils';
 
 const RequestSchema = z.object({
   messages: z.array(
@@ -35,6 +36,15 @@ export async function POST(request: NextRequest) {
 
     const { messages, model: modelId, temperature, maxTokens, topP, stream } = parsed.data;
 
+    // 验证模型是否在 main agent 允许列表中
+    const isAllowed = await validateModelForAgent('main', modelId);
+    if (!isAllowed) {
+      return NextResponse.json(
+        { error: `Model "${modelId}" is not allowed. Please use a model from the main agent configuration.` },
+        { status: 400 }
+      );
+    }
+
     const modelConfig = await getModelConfigById(modelId);
     if (!modelConfig) {
       return NextResponse.json(
@@ -50,6 +60,7 @@ export async function POST(request: NextRequest) {
 
     if (stream) {
       const encoder = new TextEncoder();
+      const moduleType = 'chatbot' as const;
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
@@ -60,7 +71,8 @@ export async function POST(request: NextRequest) {
               maxTokens,
               topP,
             })) {
-              const data = JSON.stringify(event);
+              const eventWithModule = { ...event, module: moduleType, timestamp: createTimestamp() };
+              const data = JSON.stringify(eventWithModule);
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             }
             controller.close();
@@ -68,7 +80,9 @@ export async function POST(request: NextRequest) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             const errorEvent = {
               type: 'error',
-              data: { error: errorMessage },
+              error: errorMessage,
+              module: moduleType,
+              timestamp: createTimestamp(),
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
             controller.close();

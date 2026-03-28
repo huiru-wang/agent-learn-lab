@@ -1,4 +1,5 @@
 import { useChatStore, type Message, type ModelParams } from './store';
+import { parseSSEEvents } from '@/lib/chat-utils';
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
@@ -40,60 +41,10 @@ function applySlidingWindow(messages: Message[], contextMaxTokens: number): { pr
   }
 
   const keptIds = new Set(kept.map(m => m.id));
-  return { 
-    prunedIds, 
+  return {
+    prunedIds,
     remaining: messages.filter(m => keptIds.has(m.id) || m.isPruned)
   };
-}
-
-interface SSEEvent {
-  type: 'request' | 'chunk' | 'done' | 'error';
-  data: {
-    request?: {
-      url: string;
-      method: string;
-      headers: Record<string, string>;
-      body: unknown;
-    };
-    chunk?: {
-      raw: string;
-      parsed: unknown;
-    };
-    usage?: {
-      prompt_tokens: number;
-      completion_tokens: number;
-      total_tokens: number;
-    };
-    finish_reason?: string;
-    error?: string;
-  };
-}
-
-function parseSSEEvents(text: string): { events: SSEEvent[]; remaining: string } {
-  const events: SSEEvent[] = [];
-  const lines = text.split('\n');
-  let remaining = '';
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.startsWith('data: ')) {
-      try {
-        const data = line.slice(6);
-        if (data.trim()) {
-          const event = JSON.parse(data) as SSEEvent;
-          events.push(event);
-        }
-      } catch {
-        remaining = text.slice(text.indexOf(line));
-        break;
-      }
-    } else if (line && !line.startsWith(':')) {
-      remaining = text.slice(text.indexOf(line));
-      break;
-    }
-  }
-
-  return { events, remaining };
 }
 
 export async function sendMessage(
@@ -175,38 +126,41 @@ export async function sendMessage(
         buffer = remBuffer;
 
         for (const event of events) {
-          if (event.type === 'request' && event.data.request) {
+          // Cast to any for backward compatibility with nested data format
+          const e = event as { type: string; data?: unknown; module?: string; timestamp?: number };
+          if (e.type === 'request' && (e.data as { request?: unknown })?.request) {
             const logId = `req-${Date.now()}`;
             requestLogId = logId;
             store.addRequestLog({
               id: logId,
               timestamp: startTime,
               type: 'request',
-              data: event.data.request,
+              data: (e.data as { request: unknown }).request,
             });
             store.updateLastMessageRequestLogId(logId);
-          } else if (event.type === 'chunk' && event.data.chunk) {
+          } else if (e.type === 'chunk' && (e.data as { chunk?: unknown })?.chunk) {
             const logId = `chunk-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             responseLogIds.push(logId);
+            const chunkData = (e.data as { chunk: unknown }).chunk;
             store.addRequestLog({
               id: logId,
               timestamp: Date.now(),
               type: 'response',
-              data: event.data.chunk,
+              data: chunkData,
             });
 
-            const parsed = event.data.chunk.parsed as {
+            const parsed = (chunkData as { raw?: string; parsed?: unknown }).parsed as {
               choices?: Array<{ delta?: { content?: string } }>;
-            } | null;
+            };
 
             if (parsed?.choices?.[0]?.delta?.content) {
               fullContent += parsed.choices[0].delta.content;
               store.setCurrentStreamContent(fullContent);
             }
-          } else if (event.type === 'done') {
-            totalUsage = event.data.usage;
-          } else if (event.type === 'error') {
-            throw new Error(event.data.error || 'Stream error');
+          } else if (e.type === 'done') {
+            totalUsage = (e.data as { usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } })?.usage;
+          } else if (e.type === 'error') {
+            throw new Error((e.data as { error?: string })?.error || 'Stream error');
           }
         }
       }

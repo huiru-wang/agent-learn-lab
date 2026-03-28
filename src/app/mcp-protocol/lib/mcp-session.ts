@@ -2,6 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 export interface MCPSession {
+  id: string;  // sessionId
   client: Client;
   transport: StreamableHTTPClientTransport;
   serverUrl: string;
@@ -36,6 +37,7 @@ export async function createSession(
   await client.connect(transport);
 
   sessions.set(sessionId, {
+    id: sessionId,
     client,
     transport,
     serverUrl,
@@ -47,6 +49,16 @@ export async function createSession(
 
 export function getSession(sessionId: string): MCPSession | undefined {
   return sessions.get(sessionId);
+}
+
+// Find session by serverUrl
+export function getSessionByServerUrl(serverUrl: string): MCPSession | undefined {
+  for (const session of sessions.values()) {
+    if (session.serverUrl === serverUrl) {
+      return session;
+    }
+  }
+  return undefined;
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {

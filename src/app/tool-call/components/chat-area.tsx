@@ -2,18 +2,12 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useToolCallStore } from '../lib/store';
+import { useAgentConfigStore } from '@/lib/agent-config-store';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Trash2, Loader2, User, Bot } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-interface AvailableModel {
-    id: string;
-    name: string;
-    provider: string;
-    model: string;
-}
+import { Send, Trash2, Loader2, Bot } from 'lucide-react';
+import { MessageItem } from '@/components/chat/MessageItem';
 
 type AccumulatedToolCall = {
     id: string;
@@ -43,14 +37,24 @@ interface SSEEvent {
 
 export function ChatArea() {
     const [input, setInput] = useState('');
-    const [models, setModels] = useState<AvailableModel[]>([]);
     const [selectedModel, setSelectedModel] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
 
+    const config = useAgentConfigStore((s) => s.config);
+    const models = config?.models || [];
+
+    // Update selectedModel when config loads
+    useEffect(() => {
+        if (models.length > 0 && !selectedModel) {
+            setSelectedModel(models[0].id);
+        }
+    }, [models, selectedModel]);
+
     const {
         messages,
         isStreaming,
+        requestLog,
         addMessage,
         updateLastAssistantMessage,
         addTraceStep,
@@ -60,18 +64,6 @@ export function ChatArea() {
         setToolResult,
         clearAll,
     } = useToolCallStore();
-
-    // 加载可用模型
-    useEffect(() => {
-        fetch('/api/models')
-            .then((r) => r.json())
-            .then((data) => {
-                const list: AvailableModel[] = data.models || [];
-                setModels(list);
-                if (list.length > 0) setSelectedModel(list[0].id);
-            })
-            .catch(() => { });
-    }, []);
 
     // 自动滚动到底部
     useEffect(() => {
@@ -251,7 +243,7 @@ export function ChatArea() {
     return (
         <div className="flex flex-col h-full">
             {/* 消息列表 */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 min-h-0">
                 <div className="p-4 space-y-4">
                     {messages.length === 0 && !isStreaming && (
                         <div className="text-center text-muted-foreground py-12">
@@ -260,45 +252,7 @@ export function ChatArea() {
                         </div>
                     )}
                     {messages.map((message) => (
-                        <div
-                            key={message.id}
-                            className={cn(
-                                'flex gap-3',
-                                message.role === 'user' ? 'flex-row-reverse' : ''
-                            )}
-                        >
-                            <div
-                                className={cn(
-                                    'h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0',
-                                    message.role === 'user'
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-muted'
-                                )}
-                            >
-                                {message.role === 'user' ? (
-                                    <User className="h-4 w-4" />
-                                ) : (
-                                    <Bot className="h-4 w-4" />
-                                )}
-                            </div>
-                            <div
-                                className={cn(
-                                    'max-w-[75%] text-sm',
-                                    message.role === 'user'
-                                        ? 'bg-primary/10 rounded-lg px-3 py-2 text-right'
-                                        : 'py-1'
-                                )}
-                            >
-                                {message.content || (
-                                    isStreaming && message.role === 'assistant' ? (
-                                        <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                            生成中...
-                                        </span>
-                                    ) : null
-                                )}
-                            </div>
-                        </div>
+                        <MessageItem key={message.id} message={message} requestLog={requestLog} />
                     ))}
                     <div ref={bottomRef} />
                 </div>
@@ -317,7 +271,7 @@ export function ChatArea() {
                         >
                             {models.map((m) => (
                                 <option key={m.id} value={m.id}>
-                                    {m.name}
+                                    {m.id}
                                 </option>
                             ))}
                         </select>
@@ -329,7 +283,7 @@ export function ChatArea() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="输入消息... (Enter 发送，Shift+Enter 换行)"
+                        placeholder="纽约现在几点？"
                         disabled={isStreaming}
                         className="min-h-[44px] max-h-32 resize-none"
                         rows={1}

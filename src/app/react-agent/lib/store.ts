@@ -40,6 +40,8 @@ interface ReactAgentState {
   currentThought: string;
   currentAction: Step['action'] | null;
   currentObservation: string | null;
+  // 当前流式内容（最终答案）
+  currentContent: string;
   // 回放速度
   replaySpeed: number; // 0.5, 1, 2
   // 错误信息
@@ -58,6 +60,7 @@ interface ReactAgentState {
   setAction: (toolName: string, args: Record<string, unknown>) => void;
   setObservation: (observation: string, isError?: boolean) => void;
   setFinalAnswer: (answer: string) => void;
+  appendContent: (delta: string) => void;
   createFinalStep: (thought: string, finalAnswer: string) => void;
   completeExecution: (usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) => void;
   failExecution: (error: string) => void;
@@ -96,6 +99,7 @@ export const useReactAgentStore = create<ReactAgentState>((set, get) => ({
   currentThought: '',
   currentAction: null,
   currentObservation: null,
+  currentContent: '',
   replaySpeed: 1,
   error: null,
 
@@ -123,12 +127,18 @@ export const useReactAgentStore = create<ReactAgentState>((set, get) => ({
       currentThought: '',
       currentAction: null,
       currentObservation: null,
+      currentContent: '',
       error: null,
     }),
 
   appendThought: (delta) =>
     set((state) => ({
       currentThought: state.currentThought + delta,
+    })),
+
+  appendContent: (delta) =>
+    set((state) => ({
+      currentContent: state.currentContent + delta,
     })),
 
   setThought: (thought) =>
@@ -285,6 +295,7 @@ export const useReactAgentStore = create<ReactAgentState>((set, get) => ({
       currentThought: '',
       currentAction: null,
       currentObservation: null,
+      currentContent: '',
       error: null,
     }),
 }));

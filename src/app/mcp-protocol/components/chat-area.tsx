@@ -2,18 +2,12 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMCPStore } from '../lib/store';
+import { useAgentConfigStore } from '@/lib/agent-config-store';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Trash2, Loader2, User, Bot, Plug } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-interface AvailableModel {
-  id: string;
-  name: string;
-  provider: string;
-  model: string;
-}
+import { Send, Trash2, Loader2, Bot, Plug } from 'lucide-react';
+import { MessageItem } from '@/components/chat/MessageItem';
 
 type AccumulatedToolCall = {
   id: string;
@@ -44,16 +38,26 @@ interface SSEEvent {
 
 export function ChatArea() {
   const [input, setInput] = useState('');
-  const [models, setModels] = useState<AvailableModel[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const config = useAgentConfigStore((s) => s.config);
+  const models = config?.models || [];
+
+  // Update selectedModel when config loads
+  useEffect(() => {
+    if (models.length > 0 && !selectedModel) {
+      setSelectedModel(models[0].id);
+    }
+  }, [models, selectedModel]);
 
   const {
     messages,
     isStreaming,
     currentSessionId,
     connectionStatus,
+    requestLog,
     addMessage,
     updateLastAssistantMessage,
     addTraceStep,
@@ -61,18 +65,6 @@ export function ChatArea() {
     setIsStreaming,
     clearAll,
   } = useMCPStore();
-
-  // Load available models
-  useEffect(() => {
-    fetch('/api/models')
-      .then((r) => r.json())
-      .then((data) => {
-        const list: AvailableModel[] = data.models || [];
-        setModels(list);
-        if (list.length > 0) setSelectedModel(list[0].id);
-      })
-      .catch(() => {});
-  }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -120,7 +112,7 @@ export function ChatArea() {
     let fullContent = '';
 
     try {
-      const response = await fetch('/api/mcp/chat', {
+      const response = await fetch('/mcp-protocol/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +123,11 @@ export function ChatArea() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.code === 'SESSION_NOT_FOUND') {
+          throw new Error('连接已失效，请重新连接 MCP Server');
+        }
+        throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
       const reader = response.body?.getReader();
@@ -255,7 +251,7 @@ export function ChatArea() {
   return (
     <div className="flex flex-col h-full">
       {/* Message list */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-4 space-y-4">
           {!isConnected && (
             <div className="text-center text-muted-foreground py-12">
@@ -270,43 +266,7 @@ export function ChatArea() {
             </div>
           )}
           {messages.map((message) => (
-            <div
-              key={message.id}
-              className={cn(
-                'flex gap-3',
-                message.role === 'user' ? 'flex-row-reverse' : ''
-              )}
-            >
-              <div
-                className={cn(
-                  'h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0',
-                  message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                )}
-              >
-                {message.role === 'user' ? (
-                  <User className="h-4 w-4" />
-                ) : (
-                  <Bot className="h-4 w-4" />
-                )}
-              </div>
-              <div
-                className={cn(
-                  'max-w-[75%] text-sm',
-                  message.role === 'user'
-                    ? 'bg-primary/10 rounded-lg px-3 py-2 text-right'
-                    : 'py-1'
-                )}
-              >
-                {message.content || (
-                  isStreaming && message.role === 'assistant' ? (
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      生成中...
-                    </span>
-                  ) : null
-                )}
-              </div>
-            </div>
+            <MessageItem key={message.id} message={message} requestLog={requestLog} />
           ))}
           <div ref={bottomRef} />
         </div>
@@ -325,7 +285,7 @@ export function ChatArea() {
             >
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name}
+                  {m.id}
                 </option>
               ))}
             </select>

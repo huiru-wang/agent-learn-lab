@@ -1,6 +1,14 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { getBuiltinMcpConfigs } from './config';
+import {
+  createSession,
+  getSession,
+  getSessionByServerUrl,
+  deleteSession,
+  listSessions,
+  type MCPSession,
+} from '@/app/mcp-protocol/lib/mcp-session';
 
 export interface MCPServerInfo {
   name: string;
@@ -19,9 +27,6 @@ export interface MCPToolCallResult {
   result?: unknown;
   error?: string;
 }
-
-// MCP Session cache
-const sessions = new Map<string, { client: Client; serverUrl: string }>();
 
 /**
  * 获取 MCP 服务器连接信息
@@ -56,39 +61,28 @@ export async function getMCPServerInfo(
 
 /**
  * 连接到 MCP 服务器并获取工具列表
+ * 使用共享的 session 管理
  */
 export async function connectToMCPServer(
   serverInfo: MCPServerInfo
 ): Promise<{ sessionId: string; tools: MCPTool[] }> {
-  const existingSession = sessions.get(serverInfo.serverUrl);
+  // 先尝试通过 serverUrl 查找已有 session
+  const existingSession = getSessionByServerUrl(serverInfo.serverUrl);
   if (existingSession) {
     // 复用已有 session
     const tools = await existingSession.client.listTools();
     return {
-      sessionId: serverInfo.serverUrl,
+      sessionId: existingSession.id || serverInfo.serverUrl,
       tools: tools.tools as MCPTool[],
     };
   }
 
-  const url = new URL(serverInfo.serverUrl);
-  const transport = new StreamableHTTPClientTransport(url, {
-    requestInit: serverInfo.authHeader
-      ? { headers: { Authorization: serverInfo.authHeader } }
-      : undefined,
-  });
-
-  const client = new Client(
-    { name: 'agent-learn-lab-react', version: '1.0.0' },
-    { capabilities: {} }
-  );
-
-  await client.connect(transport);
-
-  sessions.set(serverInfo.serverUrl, { client, serverUrl: serverInfo.serverUrl });
+  // 创建新 session
+  const { sessionId, client } = await createSession(serverInfo.serverUrl, serverInfo.authHeader);
 
   const tools = await client.listTools();
   return {
-    sessionId: serverInfo.serverUrl,
+    sessionId,
     tools: tools.tools as MCPTool[],
   };
 }
@@ -101,9 +95,25 @@ export async function callMCPTool(
   toolName: string,
   arguments_: Record<string, unknown>
 ): Promise<MCPToolCallResult> {
-  const session = sessions.get(sessionId);
+  const session = getSession(sessionId);
   if (!session) {
-    return { success: false, error: 'Session not found' };
+    // 尝试通过 serverUrl 查找
+    const sessionByUrl = getSessionByServerUrl(sessionId);
+    if (!sessionByUrl) {
+      return { success: false, error: 'Session not found' };
+    }
+    try {
+      const result = await sessionByUrl.client.callTool({
+        name: toolName,
+        arguments: arguments_,
+      });
+      return { success: true, result };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Tool call failed',
+      };
+    }
   }
 
   try {
@@ -124,10 +134,9 @@ export async function callMCPTool(
  * 关闭 MCP 服务器连接
  */
 export async function disconnectMCPServer(serverUrl: string): Promise<void> {
-  const session = sessions.get(serverUrl);
+  const session = getSessionByServerUrl(serverUrl);
   if (session) {
     await session.client.close();
-    sessions.delete(serverUrl);
   }
 }
 
@@ -135,8 +144,8 @@ export async function disconnectMCPServer(serverUrl: string): Promise<void> {
  * 关闭所有 MCP 连接
  */
 export async function disconnectAllMCPServers(): Promise<void> {
-  for (const [url, session] of sessions) {
-    await session.client.close();
-    sessions.delete(url);
+  const sessionIds = listSessions();
+  for (const sessionId of sessionIds) {
+    await deleteSession(sessionId);
   }
 }

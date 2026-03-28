@@ -1,64 +1,33 @@
 import { useReactAgentStore } from './store';
-
-interface SSEEvent {
-  type: 'request' | 'thought' | 'thought_delta' | 'action' | 'observation' | 'final_answer' | 'done' | 'error';
-  request?: unknown;
-  thought?: string;
-  delta?: string;
-  toolName?: string;  // 格式: "serverName:toolName"
-  arguments?: Record<string, unknown>;
-  observation?: string;
-  isError?: boolean;
-  answer?: string;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  error?: string;
-  isIterationLimit?: boolean;
-}
-
-function parseSSEEvents(text: string): { events: SSEEvent[]; remaining: string } {
-  const events: SSEEvent[] = [];
-  const lines = text.split('\n');
-  let remaining = '';
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.startsWith('data: ')) {
-      try {
-        const data = line.slice(6);
-        if (data.trim()) {
-          const event = JSON.parse(data) as SSEEvent;
-          events.push(event);
-        }
-      } catch {
-        remaining = text.slice(text.indexOf(line));
-        break;
-      }
-    } else if (line && !line.startsWith(':')) {
-      remaining = text.slice(text.indexOf(line));
-      break;
-    }
-  }
-
-  return { events, remaining };
-}
+import { useMCPStore } from '../../mcp-protocol/lib/store';
+import { parseSSEEvents } from '@/lib/chat-utils';
 
 export async function sendExecutionMessage(input: string, modelId: string) {
   const store = useReactAgentStore.getState();
 
+  // 自动获取已连接的 MCP 服务器的工具
+  const mcpStore = useMCPStore.getState();
+  const connectedTools: string[] = [];
+
+  if (mcpStore.connectionStatus === 'connected' && mcpStore.currentServerId) {
+    const currentServerId = mcpStore.currentServerId;
+    mcpStore.tools.forEach(t => {
+      connectedTools.push(`${currentServerId}:${t.name}`);
+    });
+  }
+
   store.startExecution();
 
   try {
+    const toolsToUse = connectedTools.length > 0 ? connectedTools : store.enabledTools;
+
     const response = await fetch('/react-agent/api/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         task: input,
         model: modelId,
-        tools: store.enabledTools,
+        tools: toolsToUse,
       }),
     });
 
@@ -84,28 +53,38 @@ export async function sendExecutionMessage(input: string, modelId: string) {
       buffer = remaining;
 
       for (const event of events) {
-        if (event.type === 'thought' && event.thought) {
-          // thought 事件包含完整内容，直接替换（thought_delta 已累积相同内容）
-          store.setThought(event.thought);
-          // 检查 thought 内容是否包含最终答案
-          const finalAnswerMatch = event.thought.match(/(?:最终答案|Final Answer)[:：]?\s*(.+)/i);
-          if (finalAnswerMatch) {
-            store.setFinalAnswer(finalAnswerMatch[1].trim());
-          }
-        } else if (event.type === 'thought_delta' && event.delta) {
-          store.appendThought(event.delta);
-        } else if (event.type === 'action' && event.toolName) {
-          store.setAction(event.toolName, event.arguments || {});
-        } else if (event.type === 'observation' && event.observation !== undefined) {
-          store.setObservation(event.observation, event.isError);
-        } else if (event.type === 'final_answer' && event.answer) {
-          // 创建最终步骤（thought + final_answer，无 action）
-          const currentThought = useReactAgentStore.getState().currentThought;
-          store.createFinalStep(currentThought, event.answer);
-        } else if (event.type === 'done') {
-          store.completeExecution(event.usage);
-        } else if (event.type === 'error') {
-          store.failExecution(event.error || 'Unknown error');
+        const e = event as {
+          type: string;
+          reasoning?: string;
+          delta?: string;
+          toolName?: string;
+          arguments?: Record<string, unknown>;
+          content?: string;
+          isError?: boolean;
+          answer?: string;
+          usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+          error?: string;
+        };
+
+        if (e.type === 'reasoning') {
+          // 完整的推理内容
+          store.setThought(e.reasoning || '');
+        } else if (e.type === 'reasoning_delta') {
+          // 推理内容增量
+          store.appendThought(e.delta || '');
+        } else if (e.type === 'content_delta') {
+          // 最终答案内容增量
+          store.appendContent(e.delta || '');
+        } else if (e.type === 'action' && e.toolName) {
+          store.setAction(e.toolName, e.arguments || {});
+        } else if (e.type === 'observation' && e.content !== undefined) {
+          store.setObservation(e.content, e.isError);
+        } else if (e.type === 'final_answer' && e.answer) {
+          store.setFinalAnswer(e.answer);
+        } else if (e.type === 'done') {
+          store.completeExecution(e.usage);
+        } else if (e.type === 'error') {
+          store.failExecution(e.error || 'Unknown error');
         }
       }
     }

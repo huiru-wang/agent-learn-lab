@@ -70,12 +70,6 @@
 - **WHEN** 前端建立 SSE 连接（?sessionId=xxx）
 - **THEN** 后端将 MCP Server 的所有消息（tools/list 响应、tool_call 结果等）通过 SSE 推送给前端
 
-#### Scenario: 调用 Tool POST /api/mcp/tools
-
-- **WHEN** 前端 POST /api/mcp/tools { sessionId, toolName, arguments }
-- **THEN** 后端通过对应 session 的 MCP Client 调用 tool
-- **THEN** 返回执行结果
-
 #### Scenario: 断开连接 POST /api/mcp/disconnect
 
 - **WHEN** 前端 POST /api/mcp/disconnect { sessionId }

@@ -86,35 +86,6 @@ const get_time = {
 
 清晰的描述（`description`）至关重要——模型依靠它来决定何时以及如何调用工具。
 
-## Vercel AI SDK 实现
-
-本演示使用 Vercel AI SDK 的 `streamText` + `tool()` 实现：
-
-```typescript
-import { streamText, tool } from 'ai';
-import { z } from 'zod';
-
-const result = streamText({
-  model: languageModel,
-  messages,
-  tools: {
-    get_time: tool({
-      description: '获取当前时间',
-      parameters: z.object({
-        timezone: z.string().optional(),
-        format: z.enum(['full', 'date', 'time']).optional(),
-      }),
-      execute: async (args) => {
-        return executeGetTime(args);
-      },
-    }),
-  },
-  maxSteps: 3, // 允许多轮工具调用
-});
-```
-
-SDK 自动处理：工具调用检测、参数解析、结果注入和多轮对话管理。
-
 ## 关键概念
 
 | 概念 | 说明 |

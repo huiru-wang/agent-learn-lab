@@ -2,37 +2,28 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useIntentAgentStore } from '../lib/store';
+import { useAgentConfigStore } from '@/lib/agent-config-store';
 import { sendIntentMessage } from '../lib/chat';
 import { quickExamples } from '../lib/intent-registry';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, Trash2, Loader2, Sparkles } from 'lucide-react';
 
-interface AvailableModel {
-    id: string;
-    name: string;
-    provider: string;
-    model: string;
-}
-
 export function InputPanel() {
     const [input, setInput] = useState('');
-    const [models, setModels] = useState<AvailableModel[]>([]);
     const [selectedModel, setSelectedModel] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+    const config = useAgentConfigStore((s) => s.config);
+    const models = config?.models || [];
     const { isStreaming, clearAll } = useIntentAgentStore();
 
+    // Update selectedModel when config loads
     useEffect(() => {
-        fetch('/api/models')
-            .then((r) => r.json())
-            .then((data) => {
-                const list: AvailableModel[] = data.models || [];
-                setModels(list);
-                if (list.length > 0) setSelectedModel(list[0].id);
-            })
-            .catch(() => { });
-    }, []);
+        if (models.length > 0 && !selectedModel) {
+            setSelectedModel(models[0].id);
+        }
+    }, [models, selectedModel]);
 
     useEffect(() => {
         if (textareaRef.current) {
@@ -67,7 +58,7 @@ export function InputPanel() {
                     >
                         {models.map((m) => (
                             <option key={m.id} value={m.id}>
-                                {m.name}
+                                {m.id}
                             </option>
                         ))}
                     </select>

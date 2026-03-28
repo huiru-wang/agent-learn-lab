@@ -22,20 +22,20 @@ export default function ToolCallPage() {
 
         <TabsContent value="demo" className="flex-1 m-0 p-0 overflow-hidden">
           <div className="flex h-full overflow-hidden">
-            {/* 左侧：工具卡片 + 聊天区 (60%) */}
-            <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '60%', maxWidth: '60%' }}>
+            {/* 左侧：工具卡片 + 聊天区 (50%) */}
+            <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '50%', maxWidth: '50%' }}>
               {/* 工具卡片 */}
               <div className="px-4 pt-4 pb-3 border-b bg-muted/5 flex-shrink-0">
                 <ToolList />
               </div>
               {/* 聊天区 */}
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 min-h-0">
                 <ChatArea />
               </div>
             </div>
 
-            {/* 右侧：执行轨迹 (40%) */}
-            <div className="flex-shrink-0 overflow-hidden" style={{ flexBasis: '40%', width: '40%' }}>
+            {/* 右侧：执行轨迹 (50%) */}
+            <div className="flex-1 min-w-0" style={{ flexBasis: '50%' }}>
               <ExecutionTrace />
             </div>
           </div>

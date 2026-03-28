@@ -1,0 +1,65 @@
+{
+    "models": [
+        {
+            "id": "qwen/qwen-plus",
+            "name": "qwen-plus",
+            "provider": "qwen",
+            "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "apiKey": "sk-426e3b5de57241b78da9dec03a92c75b",
+            "model": "qwen-plus"
+        }
+    ],
+    "mcps": {
+        "amap": {
+            "url": "https://mcp.amap.com/mcp?key=6faa91066162948931ad01bd85defd75"
+        }
+    },
+    "agents": {
+        "main": {
+            "name": "MainAgent",
+            "description": "默认 Agent，所有模块共用",
+            "models": [
+                "qwen/qwen-plus"
+            ],
+            "tools": [
+                "get_time"
+            ],
+            "mcps": {
+                "amap": {
+                    "tools": [
+                        "maps_geo",
+                        "maps_regeocode",
+                        "maps_ip_location",
+                        "maps_around_search",
+                        "maps_search_detail",
+                        "maps_text_search",
+                        "maps_weather"
+                    ]
+                }
+            }
+        },
+        "subAgent": {
+            "name": "SubAgent",
+            "description": "只被MainAgent调度",
+            "models": [
+                "qwen/qwen-plus"
+            ],
+            "tools": [
+                "get_time"
+            ],
+            "mcps": {
+                "amap": {
+                    "tools": [
+                        "maps_geo",
+                        "maps_regeocode",
+                        "maps_ip_location",
+                        "maps_around_search",
+                        "maps_search_detail",
+                        "maps_text_search",
+                        "maps_weather"
+                    ]
+                }
+            }
+        }
+    }
+}

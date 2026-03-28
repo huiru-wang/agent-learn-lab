@@ -22,8 +22,8 @@ export default function MCPProtocolContent() {
 
       <TabsContent value="demo" className="flex-1 m-0 p-0 overflow-hidden">
         <div className="flex h-full overflow-hidden">
-          {/* 左侧：配置（上） + 会话（下） (60%) */}
-          <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '60%', maxWidth: '60%' }}>
+          {/* 左侧：配置（上） + 会话（下） (50%) */}
+          <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '50%', maxWidth: '50%' }}>
             {/* 上半部分：配置区（固定高度 45%） */}
             <div className="flex flex-col border-b bg-muted/5 overflow-hidden" style={{ height: '45%' }}>
               {/* Server Panel: 添加按钮 + 标签 */}
@@ -37,13 +37,13 @@ export default function MCPProtocolContent() {
             </div>
 
             {/* 下半部分：会话区（剩余空间） */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 min-h-0">
               <ChatArea />
             </div>
           </div>
 
-          {/* 右侧：执行轨迹 (40%) */}
-          <div className="flex-shrink-0 overflow-hidden" style={{ flexBasis: '40%', width: '40%' }}>
+          {/* 右侧：执行轨迹 (50%) */}
+          <div className="flex-1 min-w-0" style={{ flexBasis: '50%' }}>
             <ExecutionTrace />
           </div>
         </div>

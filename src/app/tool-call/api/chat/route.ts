@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getModelConfigById } from '@/lib/config';
+import { getModelConfigById, validateModelForAgent } from '@/lib/config';
 import {
   chatCompletionStream,
   type ChatMessage,
@@ -9,6 +9,7 @@ import {
   type StreamRequestData,
 } from '@/lib/llm-client';
 import { allToolDefinitions, toolExecutors } from '../../lib/tool-registry';
+import { createTimestamp } from '@/lib/chat-utils';
 
 const RequestSchema = z.object({
   messages: z.array(
@@ -36,6 +37,15 @@ export async function POST(request: NextRequest) {
 
     const { messages: inputMessages, model: modelId } = parsed.data;
 
+    // 验证模型是否在 main agent 允许列表中
+    const isAllowed = await validateModelForAgent('main', modelId);
+    if (!isAllowed) {
+      return new Response(
+        JSON.stringify({ error: `Model "${modelId}" is not allowed. Please use a model from the main agent configuration.` }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const modelConfig = await getModelConfigById(modelId);
     if (!modelConfig) {
       return new Response(
@@ -48,8 +58,9 @@ export async function POST(request: NextRequest) {
 
     const readableStream = new ReadableStream({
       async start(controller) {
+        const moduleType = 'tool-call' as const;
         const send: SendFn = (event) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...event, module: moduleType, timestamp: createTimestamp() })}\n\n`));
         };
 
         try {

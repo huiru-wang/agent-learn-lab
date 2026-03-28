@@ -1,46 +1,6 @@
 import { useIntentAgentStore, type AnalyzeResponse } from './store';
 import { predefinedIntents } from './intent-registry';
-
-interface SSEEvent {
-  type: 'request' | 'reasoning_delta' | 'content_delta' | 'intent_result' | 'done' | 'error';
-  request?: unknown;
-  delta?: string;
-  result?: AnalyzeResponse;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  reasoning?: string;
-  error?: string;
-}
-
-function parseSSEEvents(text: string): { events: SSEEvent[]; remaining: string } {
-  const events: SSEEvent[] = [];
-  const lines = text.split('\n');
-  let remaining = '';
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.startsWith('data: ')) {
-      try {
-        const data = line.slice(6);
-        if (data.trim()) {
-          const event = JSON.parse(data) as SSEEvent;
-          events.push(event);
-        }
-      } catch {
-        remaining = text.slice(text.indexOf(line));
-        break;
-      }
-    } else if (line && !line.startsWith(':')) {
-      remaining = text.slice(text.indexOf(line));
-      break;
-    }
-  }
-
-  return { events, remaining };
-}
+import { parseSSEEvents } from '@/lib/chat-utils';
 
 export async function sendIntentMessage(input: string, modelId: string) {
   const store = useIntentAgentStore.getState();
@@ -92,7 +52,10 @@ export async function sendIntentMessage(input: string, modelId: string) {
       buffer = remaining;
 
       for (const event of events) {
-        if (event.type === 'request' && event.request) {
+        // Cast to any for backward compatibility with module-specific event format
+        const e = event as { type: string; request?: unknown; delta?: string; result?: AnalyzeResponse; usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }; reasoning?: string; error?: string; module?: string; timestamp?: number };
+
+        if (e.type === 'request' && e.request) {
           const logId = `req-${Date.now()}`;
           requestLogId = logId;
           store.updateLastMessageRequestLogId(logId);
@@ -100,11 +63,11 @@ export async function sendIntentMessage(input: string, modelId: string) {
             id: logId,
             timestamp: startTime,
             type: 'request',
-            data: event.request,
+            data: e.request,
           });
-        } else if (event.type === 'reasoning_delta' && event.delta) {
-          fullThinking += event.delta;
-          store.appendThinkingContent(event.delta);
+        } else if (e.type === 'reasoning_delta' && e.delta) {
+          fullThinking += e.delta;
+          store.appendThinkingContent(e.delta);
 
           // 记录到 response log
           const logId = `think-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
@@ -113,11 +76,11 @@ export async function sendIntentMessage(input: string, modelId: string) {
             id: logId,
             timestamp: Date.now(),
             type: 'response',
-            data: { type: 'reasoning_delta', delta: event.delta },
+            data: { type: 'reasoning_delta', delta: e.delta },
           });
-        } else if (event.type === 'content_delta' && event.delta) {
-          fullContent += event.delta;
-          store.appendContentContent(event.delta);
+        } else if (e.type === 'content_delta' && e.delta) {
+          fullContent += e.delta;
+          store.appendContentContent(e.delta);
 
           // 记录到 response log
           const logId = `content-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
@@ -126,11 +89,11 @@ export async function sendIntentMessage(input: string, modelId: string) {
             id: logId,
             timestamp: Date.now(),
             type: 'response',
-            data: { type: 'content_delta', delta: event.delta },
+            data: { type: 'content_delta', delta: e.delta },
           });
-        } else if (event.type === 'intent_result' && event.result) {
-          store.setResult(event.result);
-        } else if (event.type === 'done') {
+        } else if (e.type === 'intent_result' && e.result) {
+          store.setResult(e.result);
+        } else if (e.type === 'done') {
           // 记录完整响应日志
           const doneLogId = `done-${Date.now()}`;
           responseLogIds.push(doneLogId);
@@ -140,14 +103,14 @@ export async function sendIntentMessage(input: string, modelId: string) {
             type: 'response',
             data: {
               type: 'done',
-              usage: event.usage,
-              reasoning: event.reasoning,
+              usage: e.usage,
+              reasoning: e.reasoning,
               content: fullContent,
             },
             duration: Date.now() - startTime,
           });
-        } else if (event.type === 'error') {
-          throw new Error(event.error || 'Stream error');
+        } else if (e.type === 'error') {
+          throw new Error(e.error || 'Stream error');
         }
       }
     }

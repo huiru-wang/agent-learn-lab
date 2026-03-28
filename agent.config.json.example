@@ -1,0 +1,51 @@
+{
+    "models": [
+        {
+            "id": "qwen/qwen-max",
+            "name": "qwen-max",
+            "provider": "qwen",
+            "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "apiKey": "",
+            "model": "qwen-max"
+        },
+        {
+            "id": "zhipu/glm-4.7-flash",
+            "name": "glm-4.7-flash",
+            "provider": "zhipu",
+            "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+            "apiKey": "",
+            "model": "glm-4.7-flash"
+        }
+    ],
+    "mcps": {
+        "amap": {
+            "url": "https://mcp.amap.com/mcp?key=key"
+        }
+    },
+    "agents": {
+        "main": {
+            "name": "主 Agent",
+            "description": "默认 Agent，所有模块共用",
+            "models": [
+                "qwen/qwen-max",
+                "zhipu/glm-4.7-flash"
+            ],
+            "tools": [
+                "get_time"
+            ],
+            "mcps": {
+                "amap": {
+                    "tools": [
+                        "maps_geo",
+                        "maps_regeocode",
+                        "maps_ip_location",
+                        "maps_around_search",
+                        "maps_search_detail",
+                        "maps_text_search",
+                        "maps_weather"
+                    ]
+                }
+            }
+        }
+    }
+}

@@ -3,7 +3,7 @@ import {
   getModelConfigs,
 } from './config';
 import type { ModelConfig } from './config';
-import { createLLMCallLogger } from './llm-logger';
+import { logRequest, logResponse } from './llm-logger';
 
 // ── 兼容性重导出（供 /api/models/route.ts 等使用）──────────────────────────
 export type { ModelConfig };
@@ -86,13 +86,14 @@ export interface AccumulatedToolCall {
 
 // ── StreamEvent 类型 ──────────────────────────────────────────────────────────
 export interface StreamEvent {
-  type: 'request' | 'chunk' | 'done' | 'error' | 'tool_call_complete';
+  type: 'request' | 'chunk' | 'done' | 'error' | 'tool_call_complete' | 'reasoning_delta';
   data:
     | StreamRequestData
     | StreamChunkData
     | StreamDoneData
     | StreamErrorData
-    | StreamToolCallCompleteData;
+    | StreamToolCallCompleteData
+    | StreamReasoningDeltaData;
 }
 
 export interface StreamRequestData {
@@ -115,6 +116,10 @@ export interface StreamErrorData {
 export interface StreamToolCallCompleteData {
   tool_calls: AccumulatedToolCall[];
   finish_reason: 'tool_calls';
+}
+
+export interface StreamReasoningDeltaData {
+  reasoning_delta: string;
 }
 
 // ── 工具函数 ──────────────────────────────────────────────────────────────────
@@ -188,9 +193,7 @@ function resolveApiCredentials(model: ModelConfig): { apiKey: string; baseUrl: s
 export async function chatCompletion(
   options: ChatCompletionOptions
 ): Promise<ChatCompletionResult> {
-  const { model, messages } = options;
-  const { apiKey, baseUrl } = resolveApiCredentials(model);
-  const logger = createLLMCallLogger(false);
+  const { apiKey, baseUrl } = resolveApiCredentials(options.model);
 
   const url = buildUrl(baseUrl);
   const headers: Record<string, string> = {
@@ -200,31 +203,14 @@ export async function chatCompletion(
 
   const body = buildRequestBody(options, false);
 
-  const requestLog: RequestLog = {
-    url,
-    method: 'POST',
-    headers: {
-      ...headers,
-      Authorization: `Bearer ${maskApiKey(apiKey)}`,
-    },
-    body,
-  };
-
-  logger.setRequest(requestLog);
+  // 记录请求
+  logRequest(body);
 
   const response = await fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
   });
-
-  const responseHeaders = headersToObject(response.headers);
-  const responseLog: ResponseLog = {
-    status: response.status,
-    statusText: response.statusText,
-    headers: responseHeaders,
-    body: null,
-  };
 
   if (!response.ok) {
     const errorBody = await response.text();
@@ -234,24 +220,23 @@ export async function chatCompletion(
     } catch {
       errorJson = errorBody;
     }
-    responseLog.body = errorJson;
-    logger.setResponse(responseLog);
-    logger.flush();
-    return { request: requestLog, response: responseLog };
+    logResponse(errorJson);
+    return {
+      request: { url, method: 'POST', headers: { ...headers, Authorization: `Bearer ${maskApiKey(apiKey)}` }, body },
+      response: { status: response.status, statusText: response.statusText, headers: headersToObject(response.headers), body: errorJson },
+    };
   }
 
   const responseBody = await response.json();
-  responseLog.body = responseBody;
-
   const choice = responseBody.choices?.[0];
   const usage = responseBody.usage;
 
-  logger.setResponse(responseLog);
-  logger.flush();
+  // 记录响应
+  logResponse(responseBody, choice?.finish_reason);
 
   return {
-    request: requestLog,
-    response: responseLog,
+    request: { url, method: 'POST', headers: { ...headers, Authorization: `Bearer ${maskApiKey(apiKey)}` }, body },
+    response: { status: response.status, statusText: response.statusText, headers: headersToObject(response.headers), body: responseBody },
     text: choice?.message?.content || '',
     usage: usage
       ? {
@@ -269,7 +254,6 @@ export async function* chatCompletionStream(
   options: ChatCompletionOptions
 ): AsyncGenerator<StreamEvent> {
   const { apiKey, baseUrl } = resolveApiCredentials(options.model);
-  const logger = createLLMCallLogger(true);
 
   const url = buildUrl(baseUrl);
   const headers: Record<string, string> = {
@@ -278,6 +262,9 @@ export async function* chatCompletionStream(
   };
 
   const body = buildRequestBody(options, true);
+
+  // 记录请求
+  logRequest(body);
 
   const requestLog: RequestLog = {
     url,
@@ -288,8 +275,6 @@ export async function* chatCompletionStream(
     },
     body,
   };
-
-  logger.setRequest(requestLog);
 
   yield {
     type: 'request',
@@ -302,8 +287,6 @@ export async function* chatCompletionStream(
     body: JSON.stringify(body),
   });
 
-  const responseHeaders = headersToObject(response.headers);
-
   if (!response.ok) {
     const errorBody = await response.text();
     let errorJson: unknown;
@@ -312,13 +295,7 @@ export async function* chatCompletionStream(
     } catch {
       errorJson = errorBody;
     }
-    logger.setResponse({
-      status: response.status,
-      statusText: response.statusText,
-      headers: responseHeaders,
-      body: errorJson,
-    });
-    logger.flush();
+    logResponse(errorJson);
     yield {
       type: 'error',
       data: { error: `HTTP ${response.status}: ${errorBody}` },
@@ -385,6 +362,7 @@ export async function* chatCompletionStream(
         choices?: Array<{
           delta?: {
             content?: string;
+            reasoning_content?: string;
             tool_calls?: Array<{
               index: number;
               id?: string;
@@ -402,6 +380,15 @@ export async function* chatCompletionStream(
       };
 
       const choice = typedParsed?.choices?.[0];
+
+      // 发送 reasoning_content delta
+      const reasoningContent = choice?.delta?.reasoning_content;
+      if (reasoningContent) {
+        yield {
+          type: 'reasoning_delta',
+          data: { reasoning_delta: reasoningContent },
+        };
+      }
 
       // 累积 tool_calls delta
       const toolCallsDelta = choice?.delta?.tool_calls;
@@ -434,13 +421,22 @@ export async function* chatCompletionStream(
           total_tokens: typedParsed.usage.total_tokens || 0,
         };
       }
+      if (typedParsed?.usage) {
+        totalUsage = {
+          prompt_tokens: typedParsed.usage.prompt_tokens || 0,
+          completion_tokens: typedParsed.usage.completion_tokens || 0,
+          total_tokens: typedParsed.usage.total_tokens || 0,
+        };
+      }
     }
   }
 
+  // 记录响应（流式响应没有完整 body，记录 usage 作为响应代表）
+  const toolCallsArray = Object.values(accumulatedToolCalls);
+  logResponse({ usage: totalUsage, finish_reason: finishReason, tool_calls: toolCallsArray }, finishReason);
+
   // 如果 finish_reason 是 tool_calls，发送 tool_call_complete 事件
   if (finishReason === 'tool_calls') {
-    const toolCallsArray = Object.values(accumulatedToolCalls);
-    logger.flush();
     yield {
       type: 'tool_call_complete',
       data: {
@@ -451,7 +447,6 @@ export async function* chatCompletionStream(
     return;
   }
 
-  logger.flush();
   yield {
     type: 'done',
     data: {

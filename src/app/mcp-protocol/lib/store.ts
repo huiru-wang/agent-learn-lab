@@ -62,6 +62,19 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  tokenCount?: number;
+  requestLogId?: string;
+  responseLogIds?: string[];
+}
+
+// ── Request Log ────────────────────────────────────────────────────────────────
+
+export interface RequestLog {
+  id: string;
+  timestamp: number;
+  type: 'request' | 'response';
+  data: unknown;
+  duration?: number;
 }
 
 // ── Store ────────────────────────────────────────────────────────────────────
@@ -84,6 +97,9 @@ interface MCPState {
   // Messages
   messages: Message[];
 
+  // Request log (for debugging)
+  requestLog: RequestLog[];
+
   // Execution trace (aligned with tool-call)
   trace: TraceStep[];
   isStreaming: boolean;
@@ -100,6 +116,9 @@ interface MCPState {
   // Message actions
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateLastAssistantMessage: (content: string) => void;
+
+  // Request log actions
+  addRequestLog: (log: Omit<RequestLog, 'id'>) => string;
 
   // Trace actions (aligned with tool-call)
   addTraceStep: (step: Omit<TraceStep, 'id'>) => string;
@@ -124,6 +143,7 @@ export const useMCPStore = create<MCPState>()(
       resources: [],
       prompts: [],
       messages: [],
+      requestLog: [],
       trace: [],
       isStreaming: false,
 
@@ -184,6 +204,15 @@ export const useMCPStore = create<MCPState>()(
           return { messages };
         }),
 
+      // Request log actions
+      addRequestLog: (log) => {
+        const id = `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        set((state) => ({
+          requestLog: [...state.requestLog, { ...log, id }],
+        }));
+        return id;
+      },
+
       // Trace actions (aligned with tool-call)
       addTraceStep: (step) => {
         const id = `step-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -206,6 +235,7 @@ export const useMCPStore = create<MCPState>()(
       clearAll: () =>
         set({
           messages: [],
+          requestLog: [],
           trace: [],
           isStreaming: false,
         }),
@@ -221,6 +251,7 @@ export const useMCPStore = create<MCPState>()(
           resources: [],
           prompts: [],
           messages: [],
+          requestLog: [],
           trace: [],
           isStreaming: false,
         });
@@ -233,17 +264,20 @@ export const useMCPStore = create<MCPState>()(
         servers: state.servers,
       }),
       onRehydrateStorage: () => (state) => {
-        // Fetch builtins and merge with persisted servers
+        // Fetch agent config to get builtins and merge with persisted servers
         if (typeof window !== 'undefined' && state) {
-          fetch('/api/config/mcp-servers')
+          fetch('/api/agent/main/config')
             .then((res) => res.json())
             .then((data) => {
-              if (data.builtins && Array.isArray(data.builtins)) {
-                // 内置 MCP：id 以 builtin_ 开头，serverUrl 留空（连接时获取）
-                const builtinServers = data.builtins.map(
-                  (s: { name: string }) => ({
-                    name: s.name,
-                    id: `builtin_${s.name}`,
+              if (data.mcps && typeof data.mcps === 'object') {
+                // 内置 MCP：id 以 builtin_ 开头
+                const mcpsData = data.mcps as Record<string, { name: string; serverUrl?: string; authHeader?: string }>;
+                const builtinServers: MCPServer[] = Object.values(mcpsData).map(
+                  (mcp) => ({
+                    name: mcp.name,
+                    id: `builtin_${mcp.name}`,
+                    serverUrl: mcp.serverUrl,
+                    authHeader: mcp.authHeader,
                     isBuiltin: true,
                   })
                 );
@@ -254,7 +288,7 @@ export const useMCPStore = create<MCPState>()(
                 );
 
                 // 按名称去重：内置优先
-                const builtinNames = builtinServers.map((s: { name: string }) => s.name);
+                const builtinNames = builtinServers.map((s) => s.name);
                 const filteredUserServers = userServers.filter(
                   (s) => !builtinNames.includes(s.name)
                 );

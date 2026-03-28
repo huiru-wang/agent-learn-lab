@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { User, Bot, Settings, X, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { MarkdownContent } from '@/components/ui/markdown-content';
 
 interface LogDialogProps {
     isOpen: boolean;
@@ -92,7 +93,6 @@ function MessageItem({ message }: { message: Message }) {
             <div
                 className={cn(
                     'flex gap-3 p-4 rounded-lg transition-all',
-                    message.role === 'user' ? 'flex-row-reverse' : '',
                     message.isPruned && 'bg-red-50 border border-red-200'
                 )}
             >
@@ -106,14 +106,14 @@ function MessageItem({ message }: { message: Message }) {
                 </div>
                 <div
                     className={cn(
-                        'flex-1 space-y-1',
-                        message.role === 'user' ? 'text-right' : ''
+                        'space-y-1 overflow-hidden',
+                        message.role === 'user' ? 'w-auto ml-auto' : 'flex-1 w-full'
                     )}
                 >
                     <div className={cn(
                         'flex items-center gap-2 text-xs',
                         message.isPruned ? 'text-red-600' : 'text-muted-foreground',
-                        message.role === 'user' ? 'justify-end' : ''
+                        ''
                     )}>
                         {message.isPruned && (
                             <span className="bg-red-100 px-1.5 py-0.5 rounded text-red-600 text-xs">已清理</span>
@@ -155,15 +155,14 @@ function MessageItem({ message }: { message: Message }) {
                             </Button>
                         )}
                     </div>
-                    <div
+                    <MarkdownContent
+                        content={message.content}
                         className={cn(
-                            'text-sm whitespace-pre-wrap',
-                            message.role === 'user' ? 'bg-primary/10 p-3 rounded-lg inline-block' : '',
+                            'text-sm',
+                            message.role === 'user' ? 'bg-primary/10 p-3 rounded-lg ml-auto' : '',
                             message.isPruned && 'line-through decoration-red-400 text-red-400'
                         )}
-                    >
-                        {message.content}
-                    </div>
+                    />
                 </div>
             </div>
 

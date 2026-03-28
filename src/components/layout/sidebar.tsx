@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { useAgentConfigStore } from '@/lib/agent-config-store';
 import {
     MessageSquare,
     FileText,
@@ -10,7 +12,6 @@ import {
     Plug,
     Brain,
     GitBranch,
-    TreeDeciduous,
     RotateCcw,
     Layers,
     Database,
@@ -18,7 +19,6 @@ import {
     Users,
     Radio,
     Monitor,
-    Home,
     type LucideIcon,
 } from 'lucide-react';
 
@@ -28,62 +28,28 @@ interface NavItem {
     icon: LucideIcon;
 }
 
-interface NavSection {
-    category: string;
-    items: NavItem[];
-}
-
-type Navigation = (NavItem & { href: '/' }) | NavSection;
-
-const navigation: Navigation[] = [
-    { name: '首页', href: '/', icon: Home },
-    {
-        category: '基础篇',
-        items: [
-            { name: 'Chatbot', href: '/chatbot', icon: MessageSquare },
-            { name: 'Prompt设计', href: '/prompt-engineering', icon: FileText },
-            { name: 'Tool Call', href: '/tool-call', icon: Wrench },
-        ],
-    },
-    {
-        category: '协议篇',
-        items: [
-            { name: 'MCP协议', href: '/mcp-protocol', icon: Plug },
-        ],
-    },
-    {
-        category: '架构篇',
-        items: [
-            { name: '意图识别', href: '/intent-agent', icon: Brain },
-            { name: 'ReAct Agent', href: '/react-agent', icon: GitBranch },
-            { name: '思维链/树', href: '/chain-of-thought', icon: TreeDeciduous },
-            { name: '反思Agent', href: '/reflection-agent', icon: RotateCcw },
-        ],
-    },
-    {
-        category: '系统篇',
-        items: [
-            { name: 'Context管理', href: '/context-management', icon: Layers },
-            { name: 'Memory管理', href: '/memory-management', icon: Database },
-            { name: 'RAG Agent', href: '/rag-agent', icon: Search },
-        ],
-    },
-    {
-        category: '进阶篇',
-        items: [
-            { name: '多Agent架构', href: '/multi-agent', icon: Users },
-            { name: 'A2A协议', href: '/a2a-protocol', icon: Radio },
-            { name: 'A2UI协议', href: '/a2ui-protocol', icon: Monitor },
-        ],
-    },
+const navigation: NavItem[] = [
+    { name: 'Chatbot', href: '/chatbot', icon: MessageSquare },
+    { name: 'Prompt设计', href: '/prompt-engineering', icon: FileText },
+    { name: 'Tool Call', href: '/tool-call', icon: Wrench },
+    { name: 'MCP协议', href: '/mcp-protocol', icon: Plug },
+    { name: '意图识别', href: '/intent-agent', icon: Brain },
+    { name: 'ReAct Agent', href: '/react-agent', icon: GitBranch },
+    { name: 'Context管理', href: '/context-management', icon: Layers },
+    { name: 'Memory管理', href: '/memory-management', icon: Database },
+    { name: 'RAG Agent', href: '/rag-agent', icon: Search },
+    { name: '多Agent架构', href: '/multi-agent', icon: Users },
+    { name: 'A2A协议', href: '/a2a-protocol', icon: Radio },
+    { name: 'A2UI协议', href: '/a2ui-protocol', icon: Monitor },
 ];
-
-function isNavItem(item: Navigation): item is NavItem & { href: '/' } {
-    return 'name' in item && 'href' in item && 'icon' in item;
-}
 
 export function Sidebar() {
     const pathname = usePathname();
+    const fetchConfig = useAgentConfigStore((s) => s.fetchConfig);
+
+    useEffect(() => {
+        fetchConfig();
+    }, [fetchConfig]);
 
     return (
         <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-background">
@@ -96,52 +62,22 @@ export function Sidebar() {
                 </Link>
             </div>
             <nav className="flex-1 overflow-y-auto p-3">
-                {navigation.map((section) => {
-                    if (isNavItem(section)) {
-                        const Icon = section.icon;
-                        return (
-                            <Link
-                                key={section.href}
-                                href={section.href}
-                                className={cn(
-                                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors mb-1',
-                                    pathname === section.href
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                                )}
-                            >
-                                <Icon className="h-4 w-4" />
-                                {section.name}
-                            </Link>
-                        );
-                    }
-
+                {navigation.map((item) => {
+                    const Icon = item.icon;
                     return (
-                        <div key={section.category} className="mb-4">
-                            <h3 className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                {section.category}
-                            </h3>
-                            <div className="space-y-1">
-                                {section.items.map((item) => {
-                                    const Icon = item.icon;
-                                    return (
-                                        <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            className={cn(
-                                                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                                                pathname === item.href
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                                            )}
-                                        >
-                                            <Icon className="h-4 w-4" />
-                                            {item.name}
-                                        </Link>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={cn(
+                                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors mb-1',
+                                pathname === item.href
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )}
+                        >
+                            <Icon className="h-4 w-4" />
+                            {item.name}
+                        </Link>
                     );
                 })}
             </nav>

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useChatStore } from '../lib/store';
+import { useAgentConfigStore } from '@/lib/agent-config-store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import {
@@ -14,22 +14,18 @@ import {
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Loader2 } from 'lucide-react';
+import { useEffect } from 'react';
 
 export function ParamControls() {
+  const config = useAgentConfigStore((s) => s.config);
   const { modelParams, setModelParams, availableModels, modelsLoaded, setAvailableModels } = useChatStore();
 
+  // Sync shared config to chat store
   useEffect(() => {
-    if (!modelsLoaded) {
-      fetch('/api/models')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.models) {
-            setAvailableModels(data.models);
-          }
-        })
-        .catch(console.error);
+    if (config?.models && !modelsLoaded) {
+      setAvailableModels(config.models);
     }
-  }, [modelsLoaded, setAvailableModels]);
+  }, [config, modelsLoaded, setAvailableModels]);
 
   return (
     <Card>

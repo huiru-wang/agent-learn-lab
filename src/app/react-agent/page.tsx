@@ -3,15 +3,13 @@
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DocsPanel } from '../chatbot/components/docs-panel';
-import { InputPanel } from './components/InputPanel';
+import { ChatPanel } from './components/ChatPanel';
 import { ExecutionTrace } from './components/ExecutionTrace';
 import { ServerPanel } from '../mcp-protocol/components/server-panel';
 import { McpList } from '../mcp-protocol/components/mcp-list';
-import { useReactAgentStore } from './lib/store';
 
 export default function ReactAgentPage() {
   const [activeTab, setActiveTab] = useState('demo');
-  const enabledTools = useReactAgentStore((state) => state.enabledTools);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -25,8 +23,8 @@ export default function ReactAgentPage() {
 
         <TabsContent value="demo" className="flex-1 m-0 p-0 overflow-hidden">
           <div className="flex h-full overflow-hidden">
-            {/* 左侧: 输入区 */}
-            <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '40%', maxWidth: '40%' }}>
+            {/* 左侧: MCP配置 + 聊天 */}
+            <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '50%', maxWidth: '50%' }}>
               {/* 上半部分：MCP 服务器和工具（45% 高度） */}
               <div className="flex flex-col border-b bg-muted/5 overflow-hidden" style={{ height: '45%' }}>
                 {/* ServerPanel: 添加按钮 + 标签 */}
@@ -35,24 +33,18 @@ export default function ReactAgentPage() {
                 </div>
                 {/* MCP Tools 列表：填满剩余空间，内部滚动 */}
                 <div className="flex-1 min-h-0 px-4 pb-3">
-                  <McpList
-                  selectionMode={true}
-                  selectedTools={enabledTools}
-                  onToggleTool={(serverId, toolName) =>
-                    useReactAgentStore.getState().toggleTool(`${serverId}:${toolName}`)
-                  }
-                />
+                  <McpList />
                 </div>
               </div>
 
               {/* 下半部分：任务输入 */}
               <div className="flex-1 min-h-0 overflow-hidden">
-                <InputPanel />
+                <ChatPanel />
               </div>
             </div>
 
             {/* 右侧: 执行轨迹 */}
-            <div className="flex-1 min-w-0" style={{ flexBasis: '60%' }}>
+            <div className="flex-1 min-w-0" style={{ flexBasis: '50%' }}>
               <ExecutionTrace />
             </div>
           </div>

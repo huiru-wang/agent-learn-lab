@@ -25,12 +25,9 @@ export default function IntentAgentPage() {
                         {/* 左侧 (50%): 上半意图列表 + 下半聊天区 */}
                         <div className="flex-1 flex flex-col min-w-0 border-r overflow-hidden" style={{ flexBasis: '50%', maxWidth: '50%' }}>
                             {/* 上半部分：预定义意图列表（auto 高度） */}
-                            <div className="flex flex-col min-h-0 border-b bg-muted/5 overflow-hidden flex-shrink-0">
-                                <div className="px-4 pt-3 pb-0 flex-shrink-0">
-                                    预定义意图
-                                </div>
-                                <div className="px-4 pt-3 pb-0 flex-shrink-0">
-                                    SystemPrompt详见文档或者请求的request
+                            <div className="flex flex-col min-h-0 border-b bg-muted/5 overflow-hidden shrink-0">
+                                <div className="px-4 pt-3 pb-0 shrink-0">
+                                    预定义以下5个意图以及意图数据提取
                                 </div>
                                 <div className="px-4 p-3">
                                     <IntentList />
@@ -44,7 +41,7 @@ export default function IntentAgentPage() {
                         </div>
 
                         {/* 右侧 (50%): 分析结果 */}
-                        <div className="flex-shrink-0 overflow-hidden" style={{ flexBasis: '50%', width: '50%' }}>
+                        <div className="shrink-0 overflow-hidden" style={{ flexBasis: '50%', width: '50%' }}>
                             <ResultPanel />
                         </div>
                     </div>

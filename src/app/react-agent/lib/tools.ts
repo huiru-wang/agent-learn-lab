@@ -3,7 +3,7 @@
 import type { ToolDefinition } from '@/lib/tool-types';
 
 // 本地工具名称类型
-export type ToolName = 'weather_api' | 'calculator' | 'search';
+export type ToolName = 'weather_api' | 'calculator' | 'search' | 'get_time';
 
 // 本地工具（包含 UI 相关属性）
 export interface Tool {
@@ -22,10 +22,11 @@ export interface ToolCall {
 export type { ToolDefinition };
 
 // 工具颜色配置
-export const TOOL_COLORS: Record<ToolName, string> = {
+export const TOOL_COLORS: Record<string, string> = {
   weather_api: 'border-blue-500',
   calculator: 'border-green-500',
   search: 'border-orange-500',
+  get_time: 'border-purple-500',
 };
 
 // ── 工具参数 Schema ───────────────────────────────────────────────
@@ -64,6 +65,20 @@ export const TOOL_SCHEMAS: Record<ToolName, ToolSchema> = {
     },
     required: ['query'],
   },
+  get_time: {
+    type: 'object',
+    properties: {
+      timezone: {
+        type: 'string',
+        description: 'IANA 时区名称，例如 Asia/Shanghai、America/New_York、Europe/London。默认为 Asia/Shanghai。',
+      },
+      format: {
+        type: 'string',
+        description: '返回格式：full（完整日期时间）、date（仅日期）、time（仅时间）。默认为 full。',
+      },
+    },
+    required: [],
+  },
 };
 
 // 工具定义（包含完整 schema）
@@ -85,6 +100,12 @@ export const TOOLS: (Tool & { parameters: ToolSchema })[] = [
     description: '搜索互联网，返回相关结果摘要',
     color: TOOL_COLORS.search,
     parameters: TOOL_SCHEMAS.search,
+  },
+  {
+    name: 'get_time',
+    description: '获取指定时区的当前时间。支持全球各时区，默认返回上海时间。',
+    color: TOOL_COLORS.get_time,
+    parameters: TOOL_SCHEMAS.get_time,
   },
 ];
 
@@ -137,6 +158,27 @@ function simulateSearch(args: Record<string, unknown>): string {
   });
 }
 
+function simulateGetTime(args: Record<string, unknown>): string {
+  const tz = (args.timezone as string) || 'Asia/Shanghai';
+  const fmt = (args.format as string) || 'full';
+  const now = new Date();
+
+  try {
+    switch (fmt) {
+      case 'date':
+        return now.toLocaleDateString('zh-CN', { timeZone: tz });
+      case 'time':
+        return now.toLocaleTimeString('zh-CN', { timeZone: tz });
+      case 'full':
+      default:
+        return now.toLocaleString('zh-CN', { timeZone: tz });
+    }
+  } catch {
+    // 时区无效时回退到本地时间
+    return now.toLocaleString('zh-CN');
+  }
+}
+
 // 将本地工具转换为 ToolDefinition 格式（用于 LLM 工具调用）
 export function toToolDefinitions(): ToolDefinition[] {
   return TOOLS.map((tool) => ({
@@ -155,6 +197,8 @@ export function executeTool(toolName: ToolName, args: Record<string, unknown>): 
       return simulateCalculator(args);
     case 'search':
       return simulateSearch(args);
+    case 'get_time':
+      return simulateGetTime(args);
     default:
       return JSON.stringify({ error: `未知工具: ${toolName}` });
   }

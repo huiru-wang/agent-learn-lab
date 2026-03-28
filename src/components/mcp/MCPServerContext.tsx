@@ -15,7 +15,7 @@ export interface MCPContextValue {
   isLoading: boolean;
 
   // 服务器操作
-  addServer: (server: Omit<MCPServer, 'id'>) => string;
+  addServer: (server: Omit<MCPServer, 'id'>) => Promise<string>;
   removeServer: (id: string) => void;
   connectServer: (id: string) => Promise<void>;
   disconnectServer: (id: string) => void;

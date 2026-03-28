@@ -63,27 +63,16 @@ export function ServerPanel() {
         });
 
         try {
-            // 对于内置 MCP，需要先获取连接信息
-            let connectUrl = server.serverUrl;
-            let connectAuth = server.authHeader;
-
-            if (server.isBuiltin) {
-                const configRes = await fetch(`/api/config/mcp-servers/${encodeURIComponent(server.name)}`);
-                if (!configRes.ok) {
-                    throw new Error('Failed to get server config');
-                }
-                const configData = await configRes.json();
-                connectUrl = configData.serverUrl;
-                connectAuth = configData.authHeader;
-            }
+            // 对于内置 MCP，直接传 name 由后端代理连接
+            // 对于用户添加的 MCP，传 serverUrl
+            const connectBody = server.isBuiltin
+                ? { name: server.name }
+                : { serverUrl: server.serverUrl, authHeader: server.authHeader };
 
             const response = await fetch('/api/mcp/connect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    serverUrl: connectUrl,
-                    authHeader: connectAuth,
-                }),
+                body: JSON.stringify(connectBody),
             });
 
             const data = await response.json();
@@ -97,7 +86,7 @@ export function ServerPanel() {
 
             // Fetch capabilities
             const [toolsRes, resourcesRes, promptsRes] = await Promise.allSettled([
-                fetch('/api/mcp/tools', {
+                fetch('/api/agent/main/mcp/tools', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sessionId: data.sessionId, method: 'listTools' }),

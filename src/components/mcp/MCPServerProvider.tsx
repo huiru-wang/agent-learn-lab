@@ -99,7 +99,7 @@ export function MCPServerProvider({ children, initialSelectedTools = [] }: MCPSe
   }, []);
 
   // 添加服务器
-  const addServer = useCallback((server: Omit<MCPServer, 'id'>): string => {
+  const addServer = useCallback(async (server: Omit<MCPServer, 'id'>): Promise<string> => {
     const id = `user_${server.name}_${Date.now()}`;
     const newServer: MCPServerWithTools = {
       server: { ...server, id, isBuiltin: false },
@@ -122,6 +122,9 @@ export function MCPServerProvider({ children, initialSelectedTools = [] }: MCPSe
       })));
       return updated;
     });
+
+    // 添加后自动连接
+    await connectServer(id);
 
     return id;
   }, []);
@@ -202,6 +205,23 @@ export function MCPServerProvider({ children, initialSelectedTools = [] }: MCPSe
       );
     }
   }, [servers]);
+
+  // 自动连接所有内置服务器
+  useEffect(() => {
+    if (servers.length === 0 || isLoading) return;
+
+    // 延迟一下确保服务器列表已渲染
+    const timer = setTimeout(() => {
+      for (const server of servers) {
+        if (server.server.isBuiltin && !server.isConnected && !server.isLoading) {
+          console.log(`[MCPServerProvider] Auto-connecting builtin server: ${server.server.name}`);
+          connectServer(server.server.id);
+        }
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [servers, isLoading, connectServer]);
 
   // 断开服务器
   const disconnectServer = useCallback((id: string) => {

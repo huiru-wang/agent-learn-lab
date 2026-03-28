@@ -2,42 +2,33 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useReactAgentStore } from '../lib/store';
+import { useAgentConfigStore } from '@/lib/agent-config-store';
 import { sendExecutionMessage } from '../lib/chat';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Play, Pause, RotateCcw, Loader2 } from 'lucide-react';
-
-interface AvailableModel {
-    id: string;
-    name: string;
-    provider: string;
-    model: string;
-}
 
 // 示例任务
 const EXAMPLE_TASK = '北京明天天气怎么样？天气好的话推荐下附近的景点。';
 
 export function InputPanel() {
     const [input, setInput] = useState(EXAMPLE_TASK);
-    const [models, setModels] = useState<AvailableModel[]>([]);
     const [selectedModel, setSelectedModel] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+    const config = useAgentConfigStore((s) => s.config);
+    const models = config?.models || [];
     const { status, taskInput, enabledTools, setTaskInput, reset, clearTrace } = useReactAgentStore();
+
+    // Update selectedModel when config loads
+    useEffect(() => {
+        if (models.length > 0 && !selectedModel) {
+            setSelectedModel(models[0].id);
+        }
+    }, [models, selectedModel]);
 
     const isRunning = status === 'running';
     const canExecute = input.trim() && !isRunning;
-
-    useEffect(() => {
-        fetch('/api/models')
-            .then((r) => r.json())
-            .then((data) => {
-                const list: AvailableModel[] = data.models || [];
-                setModels(list);
-                if (list.length > 0) setSelectedModel(list[0].id);
-            })
-            .catch(() => { });
-    }, []);
 
     useEffect(() => {
         setTaskInput(input);
@@ -101,7 +92,7 @@ export function InputPanel() {
                     >
                         {models.map((m) => (
                             <option key={m.id} value={m.id}>
-                                {m.name}
+                                {m.id}
                             </option>
                         ))}
                     </select>
