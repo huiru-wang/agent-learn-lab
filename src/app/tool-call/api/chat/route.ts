@@ -9,6 +9,7 @@ import {
   type StreamRequestData,
 } from '@/lib/llm-client';
 import { allToolDefinitions, toolExecutors } from '../../lib/tool-registry';
+import { createTimestamp } from '@/lib/chat-utils';
 
 const RequestSchema = z.object({
   messages: z.array(
@@ -48,8 +49,9 @@ export async function POST(request: NextRequest) {
 
     const readableStream = new ReadableStream({
       async start(controller) {
+        const moduleType = 'tool-call' as const;
         const send: SendFn = (event) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...event, module: moduleType, timestamp: createTimestamp() })}\n\n`));
         };
 
         try {

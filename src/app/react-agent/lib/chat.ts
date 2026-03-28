@@ -1,50 +1,5 @@
 import { useReactAgentStore } from './store';
-
-interface SSEEvent {
-  type: 'request' | 'thought' | 'thought_delta' | 'action' | 'observation' | 'final_answer' | 'done' | 'error';
-  request?: unknown;
-  thought?: string;
-  delta?: string;
-  toolName?: string;  // 格式: "serverName:toolName"
-  arguments?: Record<string, unknown>;
-  observation?: string;
-  isError?: boolean;
-  answer?: string;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  error?: string;
-  isIterationLimit?: boolean;
-}
-
-function parseSSEEvents(text: string): { events: SSEEvent[]; remaining: string } {
-  const events: SSEEvent[] = [];
-  const lines = text.split('\n');
-  let remaining = '';
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.startsWith('data: ')) {
-      try {
-        const data = line.slice(6);
-        if (data.trim()) {
-          const event = JSON.parse(data) as SSEEvent;
-          events.push(event);
-        }
-      } catch {
-        remaining = text.slice(text.indexOf(line));
-        break;
-      }
-    } else if (line && !line.startsWith(':')) {
-      remaining = text.slice(text.indexOf(line));
-      break;
-    }
-  }
-
-  return { events, remaining };
-}
+import { parseSSEEvents } from '@/lib/chat-utils';
 
 export async function sendExecutionMessage(input: string, modelId: string) {
   const store = useReactAgentStore.getState();
@@ -84,28 +39,31 @@ export async function sendExecutionMessage(input: string, modelId: string) {
       buffer = remaining;
 
       for (const event of events) {
-        if (event.type === 'thought' && event.thought) {
+        // Cast to any for backward compatibility with module-specific event format
+        const e = event as { type: string; thought?: string; delta?: string; toolName?: string; arguments?: Record<string, unknown>; observation?: string; isError?: boolean; answer?: string; usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }; error?: string; module?: string; timestamp?: number };
+
+        if (e.type === 'thought' && e.thought) {
           // thought 事件包含完整内容，直接替换（thought_delta 已累积相同内容）
-          store.setThought(event.thought);
+          store.setThought(e.thought);
           // 检查 thought 内容是否包含最终答案
-          const finalAnswerMatch = event.thought.match(/(?:最终答案|Final Answer)[:：]?\s*(.+)/i);
+          const finalAnswerMatch = e.thought.match(/(?:最终答案|Final Answer)[:：]?\s*(.+)/i);
           if (finalAnswerMatch) {
             store.setFinalAnswer(finalAnswerMatch[1].trim());
           }
-        } else if (event.type === 'thought_delta' && event.delta) {
-          store.appendThought(event.delta);
-        } else if (event.type === 'action' && event.toolName) {
-          store.setAction(event.toolName, event.arguments || {});
-        } else if (event.type === 'observation' && event.observation !== undefined) {
-          store.setObservation(event.observation, event.isError);
-        } else if (event.type === 'final_answer' && event.answer) {
+        } else if (e.type === 'thought_delta' && e.delta) {
+          store.appendThought(e.delta);
+        } else if (e.type === 'action' && e.toolName) {
+          store.setAction(e.toolName, e.arguments || {});
+        } else if (e.type === 'observation' && e.observation !== undefined) {
+          store.setObservation(e.observation, e.isError);
+        } else if (e.type === 'final_answer' && e.answer) {
           // 创建最终步骤（thought + final_answer，无 action）
           const currentThought = useReactAgentStore.getState().currentThought;
-          store.createFinalStep(currentThought, event.answer);
-        } else if (event.type === 'done') {
-          store.completeExecution(event.usage);
-        } else if (event.type === 'error') {
-          store.failExecution(event.error || 'Unknown error');
+          store.createFinalStep(currentThought, e.answer);
+        } else if (e.type === 'done') {
+          store.completeExecution(e.usage);
+        } else if (e.type === 'error') {
+          store.failExecution(e.error || 'Unknown error');
         }
       }
     }

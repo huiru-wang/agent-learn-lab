@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { chatCompletionStream, type ChatMessage } from '@/lib/llm-client';
 import { getModelConfigById, getBuiltinMcpConfigs, getMcpConfigs } from '@/lib/config';
 import {
@@ -7,6 +7,8 @@ import {
   disconnectAllMCPServers,
   type MCPTool,
 } from '@/lib/react-mcp';
+import { createTimestamp } from '@/lib/chat-utils';
+import { toToolDefinitions, type ToolName } from '../lib/tools';
 
 const MAX_ITERATIONS = 10;
 
@@ -217,18 +219,33 @@ export async function POST(request: NextRequest) {
 
     // 获取启用的工具（可选）
     let enabledTools: Awaited<ReturnType<typeof getEnabledTools>>['tools'] = [];
-    let toolDefinitions: Awaited<ReturnType<typeof getEnabledTools>>['toolDefinitions'] = [];
+    const toolDefinitions: Array<{ name: string; description: string; parameters: Record<string, unknown> }> = [];
 
     if (enabledToolIds && Array.isArray(enabledToolIds) && enabledToolIds.length > 0) {
-      const result = await getEnabledTools(enabledToolIds);
-      enabledTools = result.tools;
-      toolDefinitions = result.toolDefinitions;
+      // 分离本地工具和 MCP 工具
+      // MCP 工具名称格式: "serverName:toolName" (包含冒号)
+      // 本地工具名称格式: "weather_api", "calculator", "search" (不包含冒号)
+      const localToolIds = enabledToolIds.filter((id) => !id.includes(':'));
+      const mcpToolIds = enabledToolIds.filter((id) => id.includes(':'));
+
+      // 获取本地工具定义
+      if (localToolIds.length > 0) {
+        const localDefs = toToolDefinitions().filter((t) => localToolIds.includes(t.name));
+        toolDefinitions.push(...localDefs);
+      }
+
+      // 获取 MCP 工具定义
+      if (mcpToolIds.length > 0) {
+        const result = await getEnabledTools(mcpToolIds);
+        enabledTools = result.tools;
+        toolDefinitions.push(...result.toolDefinitions);
+      }
     }
 
     // 构建工具描述（如果没有工具，则为纯推理模式）
-    const hasTools = enabledTools.length > 0;
-    const toolsDescription = enabledTools
-      .map((t) => `- ${t.name}: ${t.description || '调用 ' + t.serverName + ' 的 ' + t.toolName}`)
+    const hasTools = toolDefinitions.length > 0;
+    const toolsDescription = toolDefinitions
+      .map((t) => `- ${t.name}: ${t.description}`)
       .join('\n');
 
     const systemPrompt = hasTools
@@ -245,7 +262,7 @@ ${toolsDescription}
 
 ## 重要规则
 - 每次回复先用"思考:"开头说明推理过程
-- 如果需要工具，使用工具调用（工具名称为完整名称，如 "${enabledTools[0]?.name}"）
+- 如果需要工具，使用工具调用（工具名称为完整名称，如 "${toolDefinitions[0]?.name}"）
 - 如果已有足够信息，给出"最终答案: xxx"
 
 现在开始执行任务。`
@@ -269,8 +286,9 @@ ${toolsDescription}
 
     const stream = new ReadableStream({
       async start(controller) {
+        const moduleType = 'react' as const;
         const send = (data: unknown) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...(data as object), module: moduleType, timestamp: createTimestamp() })}\n\n`));
         };
 
         let iteration = 0;

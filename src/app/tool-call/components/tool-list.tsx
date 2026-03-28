@@ -26,7 +26,7 @@ export function ToolList() {
           <CardContent className="px-4 pb-4">
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">参数：</p>
-              {Object.entries(tool.parameters.properties).map(([paramName, paramDef]) => (
+              {Object.entries(tool.parameters.properties as Record<string, { type: string; description?: string; enum?: string[] }>).map(([paramName, paramDef]) => (
                 <div key={paramName} className="text-xs bg-muted/50 rounded px-2.5 py-1.5">
                   <span className="font-mono text-primary/80">{paramName}</span>
                   <span className="text-muted-foreground ml-1">({paramDef.type})</span>

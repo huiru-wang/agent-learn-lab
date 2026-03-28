@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Trash2, Loader2, User, Bot, Plug } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MarkdownContent } from '@/components/ui/markdown-content';
 
 interface AvailableModel {
   id: string;
@@ -297,7 +298,9 @@ export function ChatArea() {
                     : 'py-1'
                 )}
               >
-                {message.content || (
+                {message.content ? (
+                  <MarkdownContent content={message.content} />
+                ) : (
                   isStreaming && message.role === 'assistant' ? (
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       <Loader2 className="h-3 w-3 animate-spin" />

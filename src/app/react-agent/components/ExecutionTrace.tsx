@@ -46,7 +46,7 @@ function StepCard({ step, index, isActive, isHighlighted }: { step: { id: string
               'bg-blue-50 dark:bg-blue-950/30'
             )}>
               <div className="font-mono font-medium">{step.action.toolName}</div>
-              <pre className="text-xs mt-1 overflow-x-auto">
+              <pre className="text-xs mt-1 overflow-x-auto whitespace-pre-wrap break-words">
                 {JSON.stringify(step.action.arguments, null, 2)}
               </pre>
             </div>
@@ -66,7 +66,7 @@ function StepCard({ step, index, isActive, isHighlighted }: { step: { id: string
               'text-sm rounded-lg p-2',
               step.isError ? 'bg-destructive/10 border border-destructive/50' : 'bg-green-50 dark:bg-green-950/30'
             )}>
-              <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
+              <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-words">
                 {step.observation}
               </pre>
             </div>
@@ -179,7 +179,7 @@ export function ExecutionTrace() {
                       TOOL_COLORS[currentAction.toolName as keyof typeof TOOL_COLORS] || 'border-gray-500'
                     )}>
                       <div className="font-mono font-medium">{currentAction.toolName}</div>
-                      <pre className="text-xs mt-1 overflow-x-auto">
+                      <pre className="text-xs mt-1 overflow-x-auto whitespace-pre-wrap break-words">
                         {JSON.stringify(currentAction.arguments, null, 2)}
                       </pre>
                     </div>
@@ -189,7 +189,7 @@ export function ExecutionTrace() {
                   <div>
                     <div className="text-xs font-medium text-green-600 mb-1">📤 Observation</div>
                     <div className="text-sm bg-green-50 dark:bg-green-950/30 rounded-lg p-2">
-                      <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
+                      <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-words">
                         {currentObservation}
                       </pre>
                     </div>

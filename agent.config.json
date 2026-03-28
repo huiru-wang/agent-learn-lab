@@ -1,0 +1,17 @@
+{
+    "models": [
+        {
+            "id": "qwen-max",
+            "name": "qwen-max",
+            "provider": "bailian",
+            "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "apiKey": "sk-426e3b5de57241b78da9dec03a92c75b",
+            "model": "qwen-max"
+        }
+    ],
+    "mcp": {
+        "amap-maps-streamableHTTP": {
+            "url": "https://mcp.amap.com/mcp?key=6faa91066162948931ad01bd85defd75"
+        }
+    }
+}

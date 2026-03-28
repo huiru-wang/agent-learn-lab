@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Trash2, Loader2, User, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MarkdownContent } from '@/components/ui/markdown-content';
 
 interface AvailableModel {
     id: string;
@@ -289,7 +290,9 @@ export function ChatArea() {
                                         : 'py-1'
                                 )}
                             >
-                                {message.content || (
+                                {message.content ? (
+                                    <MarkdownContent content={message.content} />
+                                ) : (
                                     isStreaming && message.role === 'assistant' ? (
                                         <span className="inline-flex items-center gap-1 text-muted-foreground">
                                             <Loader2 className="h-3 w-3 animate-spin" />
@@ -329,7 +332,7 @@ export function ChatArea() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="输入消息... (Enter 发送，Shift+Enter 换行)"
+                        placeholder="纽约现在几点？"
                         disabled={isStreaming}
                         className="min-h-[44px] max-h-32 resize-none"
                         rows={1}

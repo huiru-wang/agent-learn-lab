@@ -10,6 +10,7 @@ import {
     type ToolDefinition,
 } from '@/lib/llm-client';
 import { getSession } from '@/app/mcp-protocol/lib/mcp-session';
+import { createTimestamp } from '@/lib/chat-utils';
 
 const RequestSchema = z.object({
     sessionId: z.string(),
@@ -75,8 +76,9 @@ export async function POST(request: NextRequest) {
 
         const readableStream = new ReadableStream({
             async start(controller) {
+                const moduleType = 'mcp' as const;
                 const send: SendFn = (event) => {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...event, module: moduleType, timestamp: createTimestamp() })}\n\n`));
                 };
 
                 try {

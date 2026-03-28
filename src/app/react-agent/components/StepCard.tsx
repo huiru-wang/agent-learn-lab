@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { TOOL_COLORS, type ToolName } from '../lib/tools';
+import { TOOL_COLORS } from '../lib/tools';
 import type { Step } from '../lib/store';
 import { AlertCircle } from 'lucide-react';
 
@@ -69,7 +69,7 @@ export function StepCard({ step, index, isHighlighted, isActive }: StepCardProps
               )}
             >
               <div className="font-mono font-medium">{step.action.toolName}</div>
-              <pre className="text-xs mt-1 overflow-x-auto">
+              <pre className="text-xs mt-1 overflow-x-auto whitespace-pre-wrap break-words">
                 {JSON.stringify(step.action.arguments, null, 2)}
               </pre>
             </div>
@@ -97,7 +97,7 @@ export function StepCard({ step, index, isHighlighted, isActive }: StepCardProps
                   : 'bg-green-50 dark:bg-green-950/30'
               )}
             >
-              <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
+              <pre className="text-xs overflow-x-auto whitespace-pre-wrap break-words">
                 {isExpanded
                   ? step.observation
                   : step.observation.slice(0, 100) + (step.observation.length > 100 ? '...' : '')}

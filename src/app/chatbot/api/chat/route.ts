@@ -6,6 +6,7 @@ import {
   chatCompletionStream,
   type ChatMessage,
 } from '@/lib/llm-client';
+import { createTimestamp } from '@/lib/chat-utils';
 
 const RequestSchema = z.object({
   messages: z.array(
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
 
     if (stream) {
       const encoder = new TextEncoder();
+      const moduleType = 'chatbot' as const;
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
@@ -60,7 +62,8 @@ export async function POST(request: NextRequest) {
               maxTokens,
               topP,
             })) {
-              const data = JSON.stringify(event);
+              const eventWithModule = { ...event, module: moduleType, timestamp: createTimestamp() };
+              const data = JSON.stringify(eventWithModule);
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             }
             controller.close();
@@ -68,7 +71,9 @@ export async function POST(request: NextRequest) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             const errorEvent = {
               type: 'error',
-              data: { error: errorMessage },
+              error: errorMessage,
+              module: moduleType,
+              timestamp: createTimestamp(),
             };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
             controller.close();

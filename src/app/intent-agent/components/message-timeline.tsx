@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { User, Bot, X, ArrowUpRight, ArrowDownLeft, Loader2 } from 'lucide-react';
+import { MarkdownContent } from '@/components/ui/markdown-content';
 
 interface LogDialogProps {
   isOpen: boolean;
@@ -138,9 +139,7 @@ function MessageItem({ message }: { message: Message }) {
           </div>
 
           {message.role === 'user' ? (
-            <div className="text-sm whitespace-pre-wrap bg-primary/10 p-3 rounded-lg inline-block">
-              {message.content}
-            </div>
+            <MarkdownContent content={message.content} className="text-sm bg-primary/10 p-3 rounded-lg inline-block" />
           ) : (
             <div className="space-y-2">
               {message.thinkingContent && (
@@ -148,14 +147,10 @@ function MessageItem({ message }: { message: Message }) {
                   <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 mb-1.5">
                     💭 Thinking
                   </div>
-                  <div className="text-sm italic text-purple-700 dark:text-purple-300 whitespace-pre-wrap">
-                    {message.thinkingContent}
-                  </div>
+                  <MarkdownContent content={message.thinkingContent} className="text-sm italic text-purple-700 dark:text-purple-300" />
                 </div>
               )}
-              <div className="text-sm whitespace-pre-wrap">
-                {message.content}
-              </div>
+              <MarkdownContent content={message.content} className="text-sm" />
             </div>
           )}
         </div>
@@ -193,16 +188,12 @@ function StreamingMessage() {
                 <Loader2 className="h-3 w-3 animate-spin ml-1" />
               )}
             </div>
-            <div className="text-sm italic text-purple-700 dark:text-purple-300 whitespace-pre-wrap">
-              {currentThinkingContent}
-            </div>
+            <MarkdownContent content={currentThinkingContent} className="text-sm italic text-purple-700 dark:text-purple-300" />
           </div>
         )}
 
         {currentContentContent ? (
-          <div className="text-sm whitespace-pre-wrap">
-            {currentContentContent}
-          </div>
+          <MarkdownContent content={currentContentContent} className="text-sm" />
         ) : !currentThinkingContent ? (
           <span className="text-sm text-muted-foreground inline-flex items-center gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />

@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { User, Bot, Settings, X, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { MarkdownContent } from '@/components/ui/markdown-content';
 
 interface LogDialogProps {
     isOpen: boolean;
@@ -155,15 +156,14 @@ function MessageItem({ message }: { message: Message }) {
                             </Button>
                         )}
                     </div>
-                    <div
+                    <MarkdownContent
+                        content={message.content}
                         className={cn(
-                            'text-sm whitespace-pre-wrap',
+                            'text-sm',
                             message.role === 'user' ? 'bg-primary/10 p-3 rounded-lg inline-block' : '',
                             message.isPruned && 'line-through decoration-red-400 text-red-400'
                         )}
-                    >
-                        {message.content}
-                    </div>
+                    />
                 </div>
             </div>
 

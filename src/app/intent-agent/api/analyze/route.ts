@@ -8,6 +8,7 @@ import {
   type StreamDoneData,
 } from '@/lib/llm-client';
 import type { IntentDef } from '../../lib/intent-registry';
+import { createTimestamp } from '@/lib/chat-utils';
 
 const RequestSchema = z.object({
   text: z.string().min(1, '输入文本不能为空'),
@@ -153,8 +154,9 @@ export async function POST(request: NextRequest) {
 
     const readableStream = new ReadableStream({
       async start(controller) {
+        const moduleType = 'intent' as const;
         const send: SendFn = (event) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...event, module: moduleType, timestamp: createTimestamp() })}\n\n`));
         };
 
         try {
